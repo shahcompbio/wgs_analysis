@@ -1,0 +1,8 @@
+stage	gc_clamp	max_alignment_count	min_product_count	max_product_count	opt_size	target_buffer	min_product_size	max_product_size
+0	2	5	1	5	21	30	185	215
+1	2	5	1	5	23	15	185	215
+2	2	5	1	5	25	0	185	215
+3	1	5	1	5	25	0	185	215
+4	-1	5	1	5	25	0	185	215
+5	-1	15	1	15	25	0	185	215
+6	-1	-1	1	-1	25	0	185	215
