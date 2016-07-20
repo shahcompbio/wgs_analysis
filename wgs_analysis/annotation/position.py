@@ -27,17 +27,15 @@ def annotate_adjacent_density(df, stddev=5000):
 
     """
 
-    df = df.rename(columns={'chromosome': 'chrom', 'position': 'coord'})
-
-    positions = df[['chrom', 'coord']].drop_duplicates()\
-                                      .set_index(['chrom', 'coord'], drop=False)\
+    positions = df[['chromosome', 'position']].drop_duplicates()\
+                                      .set_index(['chromosome', 'position'], drop=False)\
                                       .sort_index()
-    positions['coord'] = positions['coord'].astype(float)
+    positions['position'] = positions['position'].astype(float)
 
-    adjacent_density = positions.groupby('chrom')['coord']\
+    adjacent_density = positions.groupby('chromosome')['position']\
                                 .transform(calculate_adjacent_density, stddev)
 
-    df.set_index(['chrom', 'coord'], inplace=True)
+    df.set_index(['chromosome', 'position'], inplace=True)
     df['adjacent_density'] = adjacent_density
     df.reset_index(inplace=True)
 
