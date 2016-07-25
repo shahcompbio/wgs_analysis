@@ -9,9 +9,9 @@ import matplotlib
 import matplotlib.pyplot as plt
 import seaborn
 
-import ith_project.analysis.plots as plots
-import ith_project.analysis.refgenome as refgenome
-import ith_project.analysis.plots.colors
+import wgs_analysis.plots as plots
+import wgs_analysis.refgenome as refgenome
+import wgs_analysis.plots.colors
 
 
 default_rearrangement_types = ['foldback', 'deletion', 'duplication', 'inversion', 'balanced', 'unbalanced', 'complex']

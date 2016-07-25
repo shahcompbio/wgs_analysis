@@ -14,7 +14,7 @@ class RefGenomeInfo(object):
         if version == 'hg19':
             self.chromosomes = [str(a) for a in xrange(1, 23)] + ['X']
 
-            genome_fasta_index = pkg_resources.resource_filename('ith_project.analysis', 'data/GRCh37-lite.fa.fai')
+            genome_fasta_index = pkg_resources.resource_filename('wgs_analysis', 'data/GRCh37-lite.fa.fai')
 
             self.chromosome_lengths = pd.Series(read_chromosome_lengths(genome_fasta_index)).reindex(self.chromosomes)
 

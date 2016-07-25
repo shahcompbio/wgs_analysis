@@ -7,9 +7,9 @@ Subsetting of rearrangements and generation of derivative tables.
 
 import pandas as pd
 
-import ith_project.analysis.params as params
-import ith_project.analysis.annotation as annotation
-import ith_project.analysis.annotation.rearrangement
+import wgs_analysis.params as params
+import wgs_analysis.annotation as annotation
+import wgs_analysis.annotation.rearrangement
 
 def expression_correlated(breakpoints, expression):
 

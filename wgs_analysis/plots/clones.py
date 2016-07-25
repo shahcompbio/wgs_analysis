@@ -5,7 +5,7 @@
 
 import matplotlib.pyplot as plt
 
-import ith_project.analysis.helpers as helpers
+import wgs_analysis.helpers as helpers
 
 
 def plot_mixture_class_legend(legend_filename):

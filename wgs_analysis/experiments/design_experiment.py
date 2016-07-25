@@ -3,20 +3,21 @@ import warnings
 import random
 import pandas as pd
 
-import ith_project.analysis.helpers as helpers
-import ith_project.analysis.experiments.design_utils as design_utils
-import ith_project.analysis.experiments.design_primers as design_primers
-import ith_project.analysis.experiments.design_snv_primers as design_snv_primers
-import ith_project.analysis.experiments.design_break_primers as design_break_primers
+import wgs_analysis.experiments.design_primers as design_primers
+import wgs_analysis.experiments.design_snv_primers as design_snv_primers
+import wgs_analysis.experiments.design_break_primers as design_break_primers
 
 
 
-def design_categories(selection, designer, seed=2014, **kwargs):
+def design_categories(selection, designer, genome_fasta, seed=2014, **kwargs):
     """ Design primers in groups with group specific requirements
 
     Args:
         selection(pandas.DataFrame) : selected variants table, see format below
         designer(callable) : design function, either design_snv_primers.design or design_break_primers.design
+        genome_fasta(str) : genome fasta filename
+
+    KwArgs:
         seed(int) : random seed for shuffling
         kwargs : additional arguments to design function
 
@@ -47,7 +48,7 @@ def design_categories(selection, designer, seed=2014, **kwargs):
         variants = variants.ix[shuffled_index]
 
         # Design primers
-        primers = designer(helpers.genome_fasta, variants, max_stage=max_primer_stage, max_primers=subset_count, **kwargs)
+        primers = designer(genome_fasta, variants, max_stage=max_primer_stage, max_primers=subset_count, **kwargs)
 
         # Warn if requirements not met
         if subset_count >= 0:
@@ -100,7 +101,7 @@ def print_design_stats(**kwargs):
 
 
 
-def design_experiment(patient_id, experiment_id, experiment_type, snvs=None, breakpoints=None):
+def design_experiment(patient_id, experiment_id, experiment_type, genome_fasta, variant_vcfs, snvs=None, breakpoints=None):
     """
     Design primers for both SNVs and breakpoints and write to the appropriate location in the
     meta_data directory.
@@ -109,6 +110,10 @@ def design_experiment(patient_id, experiment_id, experiment_type, snvs=None, bre
         patient_id(str) : patient identifier
         experiment_id(str) : experiment identifier to distinguish different experiments per patient
         experiment_type(str) : type of experiment, either `seqval` or `singlecell`
+        genome_fasta(str) : genome fasta filename
+        variant_vcfs(list) : list of vcfs containing variants to avoid
+
+    KwArgs:
         snvs(pandas.DataFrame) : SNVs selected for primer design
         breakpoints(pandas.DataFrame) : Breakpoints selected for primer design
         experiment_type(str) : 
@@ -153,20 +158,18 @@ def design_experiment(patient_id, experiment_id, experiment_type, snvs=None, bre
 
     # Design primers
 
-    variant_vcfs = list()
-    variant_vcfs.append(helpers.get_variant_vcf(patient_id))
-
     print_design_stats(snvs=snvs, breakpoints=breakpoints)
 
     primer_table = list()
 
-    with design_primers.BlatServer(helpers.genome_fasta):
+    with design_primers.BlatServer(genome_fasta):
 
         if snvs is not None:
 
             print 'designing primers for SNVs'
 
-            snv_primers = design_categories(snvs, design_snv_primers.design, variant_vcfs=variant_vcfs,
+            snv_primers = design_categories(snvs, design_snv_primers.design,
+                genome_fasta, variant_vcfs=variant_vcfs,
                 requirements_filename=design_snv_primers.get_requirements_filename(experiment_type))
 
             snv_primers['variant_type'] = 'snv'
@@ -178,7 +181,8 @@ def design_experiment(patient_id, experiment_id, experiment_type, snvs=None, bre
 
             print 'designing primers for breakpoints'
 
-            breakpoint_primers = design_categories(breakpoints, design_break_primers.design, variant_vcfs=variant_vcfs,
+            breakpoint_primers = design_categories(breakpoints, design_break_primers.design,
+                genome_fasta, variant_vcfs=variant_vcfs,
                 requirements_filename=design_break_primers.get_requirements_filename(experiment_type))
 
             breakpoint_primers['variant_type'] = 'breakpoint'
@@ -206,8 +210,6 @@ def design_experiment(patient_id, experiment_id, experiment_type, snvs=None, bre
     primer_table = primer_table.groupby('seq_id').apply(merge_duplicates_pairs)
 
     primer_table['patient_id'] = patient_id
-    primer_table['normal_voa_id'] = helpers.get_voa_id(patient_id, 'normal_blood')
-    primer_table['normal_dg_id'] = helpers.get_dg_id(patient_id, 'normal_blood')
 
     return primer_table
 
@@ -315,46 +317,4 @@ def calculate_seq_id_category_map(primer_table):
             
     return pd.DataFrame(seq_id_category, columns=['seq_id', 'category'])
 
-
-
-def write_primer_table(patient_id, experiment_id, experiment_type, primer_table):
-
-    primer_basename = 'patient_{0}.{1}_{2}.primers.tsv'.format(patient_id, experiment_type, experiment_id)
-
-    metadata_dir = os.path.join(helpers.metadata_directory, 'raw', 'validation', 'design_files')
-    paper_dir = os.path.join(helpers.ith_directory, 'paper', 'validation')
-
-    for primer_dir in (metadata_dir, paper_dir):
-
-        primer_filename = os.path.join(primer_dir, primer_basename)
-
-        primer_table.to_csv(primer_filename, sep='\t', index=False, na_rep='NA')
-
-
-
-def write_experiment_snvs(patient_id, experiment_id, experiment_type, primer_table, snvs):
-
-    snvs['seq_id'] = create_snv_seq_id(snvs)
-
-    snvs = snvs.merge(primer_table[['seq_id', 'category']].drop_duplicates(), on='seq_id', how='inner')
-
-    validation_dir = os.path.join(helpers.ith_directory, 'paper', 'validation')
-    validation_basename = 'patient_{0}.{1}_{2}.snvs.tsv'.format(patient_id, experiment_type, experiment_id)
-    validation_filename = os.path.join(validation_dir, validation_basename)
-
-    snvs.to_csv(validation_filename, sep='\t', index=False, na_rep='NA')
-
-
-
-def write_experiment_breakpoints(patient_id, experiment_id, experiment_type, primer_table, breakpoints):
-
-    breakpoints['seq_id'] = create_breakpoint_seq_id(breakpoints)
-
-    breakpoints = breakpoints.merge(primer_table[['seq_id', 'category']].drop_duplicates(), on='seq_id', how='inner')
-
-    validation_dir = os.path.join(helpers.ith_directory, 'paper', 'validation')
-    validation_basename = 'patient_{0}.{1}_{2}.breakpoints.tsv'.format(patient_id, experiment_type, experiment_id)
-    validation_filename = os.path.join(validation_dir, validation_basename)
-    
-    breakpoints.to_csv(validation_filename, sep='\t', index=False, na_rep='NA')
 

@@ -10,15 +10,15 @@ import collections
 import numpy as np
 import pandas as pd
 
-import ith_project.analysis.algorithms as algorithms
-import ith_project.analysis.algorithms.merge
+import wgs_analysis.algorithms as algorithms
+import wgs_analysis.algorithms.merge
 
 
 def label_presence(node, presence):
     """ Add present label to nodes
 
     Args:
-        node (ith_project.analysis.trees.TreeNode): tree node
+        node (wgs_analysis.trees.TreeNode): tree node
         presence (dict): dictionary of presences by leaf name
 
     Add the present label to nodes.  By default nodes are labeled absent.  If any 
@@ -49,7 +49,7 @@ def check_consistency(node):
     """ Check presence consistency
 
     Args:
-        node (ith_project.analysis.trees.TreeNode): tree node
+        node (wgs_analysis.trees.TreeNode): tree node
 
     Raises:
         InconsistentError
@@ -71,7 +71,7 @@ def annotate_presence_timing(variants, tree, column_name, presence_f):
 
     Args:
         cnv (pandas.DataFrame): variant_site table
-        tree (ith_project.analysis.trees.TreeNode): tree
+        tree (wgs_analysis.trees.TreeNode): tree
         column_name (str): column name to annotate
         presence_f (callable): function to calculate a dictionary of presences by site
 
@@ -114,7 +114,7 @@ def annotate_loh_timing(variants, tree):
 
     Args:
         cnv (pandas.DataFrame): variant_site table
-        tree (ith_project.analysis.trees.TreeNode): tree
+        tree (wgs_analysis.trees.TreeNode): tree
 
     Returns:
         pandas.DataFrame: original table with `loh_timing` column
@@ -134,7 +134,7 @@ def annotate_hdel_timing(variants, tree):
 
     Args:
         cnv (pandas.DataFrame): variant_site table
-        tree (ith_project.analysis.trees.TreeNode): tree
+        tree (wgs_analysis.trees.TreeNode): tree
 
     Returns:
         pandas.DataFrame: original table with `hdel_timing` column

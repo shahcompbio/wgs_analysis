@@ -10,7 +10,7 @@ import collections
 import numpy as np
 import pandas as pd
 
-from ith_project.analysis.algorithms.position import calculate_adjacent_density
+from wgs_analysis.algorithms.position import calculate_adjacent_density
 
 
 def annotate_adjacent_density(df, stddev=5000):

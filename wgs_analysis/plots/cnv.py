@@ -14,12 +14,12 @@ import matplotlib
 import matplotlib.pyplot as plt
 import seaborn
 
-import ith_project.analysis.plots as plots
-import ith_project.analysis.plots.colors
-import ith_project.analysis.plots.positions
-import ith_project.analysis.plots.utils
-import ith_project.analysis.algorithms as algorithms
-import ith_project.analysis.algorithms.cnv
+import wgs_analysis.plots as plots
+import wgs_analysis.plots.colors
+import wgs_analysis.plots.positions
+import wgs_analysis.plots.utils
+import wgs_analysis.algorithms as algorithms
+import wgs_analysis.algorithms.cnv
 
 
 

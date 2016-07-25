@@ -11,14 +11,14 @@ import scipy
 import dollo.run
 import scipy.misc
 
-import ith_project.analysis.helpers as helpers
-import ith_project.analysis.params as params
-import ith_project.analysis.annotation as annotation
-import ith_project.analysis.annotation.cnv
-import ith_project.analysis.algorithms as algorithms
-import ith_project.analysis.algorithms.tree
-import ith_project.analysis.plots as plots
-import ith_project.analysis.plots.utils
+import wgs_analysis.helpers as helpers
+import wgs_analysis.params as params
+import wgs_analysis.annotation as annotation
+import wgs_analysis.annotation.cnv
+import wgs_analysis.algorithms as algorithms
+import wgs_analysis.algorithms.tree
+import wgs_analysis.plots as plots
+import wgs_analysis.plots.utils
 
 
 def convergent_loh(tree, cnv):

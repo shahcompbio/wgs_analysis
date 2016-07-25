@@ -5,11 +5,11 @@ import string
 import numpy as np
 import pandas as pd
 
-import ith_project.analysis.helpers as helpers
-import ith_project.analysis.plots as plots
-import ith_project.analysis.plots.trees
-import ith_project.analysis.algorithms as algorithms
-import ith_project.analysis.algorithms.tree
+import wgs_analysis.helpers as helpers
+import wgs_analysis.plots as plots
+import wgs_analysis.plots.trees
+import wgs_analysis.algorithms as algorithms
+import wgs_analysis.algorithms.tree
 
 
 def load_wgss_node_prevalence(patient_id):

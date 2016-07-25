@@ -12,11 +12,11 @@ from matplotlib.patches import Rectangle as Rectangle
 from mpl_toolkits.axes_grid import Divider, LocatableAxes, Size
 import seaborn
 
-import ith_project.analysis.helpers as helpers
-import ith_project.analysis.plots as plots
-import ith_project.analysis.plots.colors
-import ith_project.analysis.plots.utils
-import ith_project.analysis.plots.trees
+import wgs_analysis.helpers as helpers
+import wgs_analysis.plots as plots
+import wgs_analysis.plots.colors
+import wgs_analysis.plots.utils
+import wgs_analysis.plots.trees
 
 
 def plot_tree_genotype_samples(tree, genotype_table, sample_table, prevalence_type='count', event_colors=None, small_values=None):

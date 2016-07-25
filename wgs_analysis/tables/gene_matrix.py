@@ -9,8 +9,8 @@ candidates.
 import pandas as pd
 import numpy as np
 
-import ith_project.analysis.helpers as helpers
-import ith_project.analysis.tables as tables
+import wgs_analysis.helpers as helpers
+import wgs_analysis.tables as tables
 
 
 def sort_matrix(matrix):

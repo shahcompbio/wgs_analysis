@@ -12,8 +12,8 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import seaborn as sb
 
-import ith_project.analysis.plots as plots
-import ith_project.analysis.refgenome as refgenome
+import wgs_analysis.plots as plots
+import wgs_analysis.refgenome as refgenome
 
 
 max_color_idx = 12

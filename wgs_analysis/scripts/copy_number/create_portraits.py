@@ -9,7 +9,7 @@ import matplotlib.backends.backend_pdf
 import remixt.cn_plot
 
 import ith_project.study
-import ith_project.analysis.plots.utils
+import wgs_analysis.plots.utils
 
 
 def create_patient_portrait(plot_filename):
@@ -30,17 +30,17 @@ def create_patient_portrait(plot_filename):
                     print 'no copy number results for patient {patient_id}, sample {sample_id}'.format(patient_id=patient_id, sample_id=sample_id)
                     continue
 
-                ith_project.analysis.plots.utils.setup_plot()
+                wgs_analysis.plots.utils.setup_plot()
                 fig = plt.figure(figsize=(12, 3))
 
                 gs = matplotlib.gridspec.GridSpec(1, 2, width_ratios=[5, 1]) 
 
-                ax0 = ith_project.analysis.plots.utils.setup_axes(plt.subplot(gs[0]))
+                ax0 = wgs_analysis.plots.utils.setup_axes(plt.subplot(gs[0]))
                 remixt.cn_plot.plot_cnv_genome(ax0, cn_table, maxcopies=6, major_col='major_raw', minor_col='minor_raw')
                 ax0.set_ylabel('Raw copy number')
                 ax0.set_title('Raw copy number for patient {patient_id}, sample {sample_id}'.format(patient_id=patient_id, sample_id=sample_id))
 
-                ax1 = ith_project.analysis.plots.utils.setup_axes(plt.subplot(gs[1]))
+                ax1 = wgs_analysis.plots.utils.setup_axes(plt.subplot(gs[1]))
                 cov = 0.000001
                 data = cn_table[['minor_raw', 'major_raw', 'length']].dropna()
                 remixt.utils.filled_density_weighted(ax1, data['minor_raw'].values, data['length'].values, 'blue', 0.5, 0.0, 6.0, cov, rotate=True)
