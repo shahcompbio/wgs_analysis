@@ -211,6 +211,8 @@ def design_experiment(patient_id, experiment_id, experiment_type, genome_fasta, 
 
     primer_table['patient_id'] = patient_id
 
+    print 'designed {} primers'.format(len(primer_table.index))
+
     return primer_table
 
 
