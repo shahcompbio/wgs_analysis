@@ -8,6 +8,7 @@ import gzip
 import pandas as pd
 import pickle
 
+
 def load_tree(file_name):
     
     with gzip.GzipFile(file_name, 'r') as fh:
@@ -15,8 +16,8 @@ def load_tree(file_name):
     
     return tree
 
+
 def tree_to_table(tree):
-    
     tree_table = []
 
     for n in tree.nodes:
@@ -24,15 +25,16 @@ def tree_to_table(tree):
             child.parent = n.label
     
     for n in tree.nodes:
-        tree_table.append(
-            {
-                'label' : n.label, 
-                'name' : n.name, 
-                'parent' : getattr(n, 'parent', -1)
-            }
-        )
+        node_attr = {}
+
+        for key, value in n.__dict__.iteritems():
+            if isinstance(value, (int, float, str)):
+                node_attr[key] = value
+
+        tree_table.append(node_attr)
         
     return pd.DataFrame(tree_table)
+
 
 def table_to_tree(table):
     
@@ -40,19 +42,19 @@ def table_to_tree(table):
 
     nodes = {}
     
-    for _, row in table.iterrows():
-        
+    skip = table.isnull()
+    
+    for idx in table.index:
         n = dollo.trees.TreeNode()
             
-        if row['parent'] in nodes:
-            n.add_parent(row['parent'])
-            
-            nodes[row['parent']].children.append(n)
-            
-        n.name = row['name']
-    
-        n.label = row['label']
-        
+        for col in table.columns:
+            if not skip.loc[idx, col]:
+                setattr(n, col, table.loc[idx, col])
+                
         nodes[n.label] = n
+    
+    for label, node in nodes.iteritems():
+        if hasattr(node, 'parent') and node.parent >= 0:
+            nodes[node.parent].children.append(node)
 
     return nodes[0]
