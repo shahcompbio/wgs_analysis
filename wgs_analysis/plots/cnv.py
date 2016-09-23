@@ -20,6 +20,7 @@ import wgs_analysis.plots.positions
 import wgs_analysis.plots.utils
 import wgs_analysis.algorithms as algorithms
 import wgs_analysis.algorithms.cnv
+import wgs_analysis.refgenome
 
 
 
@@ -577,26 +578,36 @@ def plot_subclonal(ax, segment_table, stats_table, segment_length=100000):
     plot_cn_matrix(ax, subclonal, segment_length=segment_length)
 
 
-def plot_cn_matrix(ax, matrix, segment_length=100000, norm_min=0.0, norm_max=1.0):
+def plot_cn_matrix(ax, matrix, segment_length=100000, norm_min=0.0, norm_max=1.0, cmap=None):
+    
+    if cmap is None:
+        cmap = plt.get_cmap('Oranges')
 
-    chromosome_index = [(chrom, idx) for idx, chrom in enumerate(plots.utils.chromosomes)]
-    chromosome_index = pd.DataFrame(chromosome_index, columns=['chrom', 'chrom_idx'])
+    chromosome_index = [(chrom, idx) for idx, chrom in enumerate(wgs_analysis.refgenome.info.chromosomes)]
+    chromosome_index = pd.DataFrame(chromosome_index, columns=['chromosome', 'chromosome_idx'])
 
-    matrix = matrix.reset_index()\
-                   .merge(chromosome_index)\
-                   .drop('chrom', axis=1)\
-                   .set_index(['chrom_idx', 'segment_start'])\
-                   .sort_index()\
+    matrix = (
+        matrix
+        .reset_index()
+        .merge(chromosome_index)
+        .drop('chromosome', axis=1)
+        .set_index(['chromosome_idx', 'start'])
+        .sort_index()
+    )
 
-    ax.imshow(matrix.values.T, aspect='auto', 
-              interpolation='nearest',
-              cmap=plt.get_cmap('Oranges'),
-              norm=matplotlib.colors.Normalize(vmin=norm_min, vmax=norm_max, clip=True))
+    ax.imshow(
+        matrix.values.T, aspect='auto', 
+        interpolation='nearest',
+        cmap=cmap,
+        norm=matplotlib.colors.Normalize(vmin=norm_min, vmax=norm_max, clip=True),
+    )
 
-    chrom_seg_cnt = matrix.reset_index()\
-                          .groupby('chrom_idx')\
-                          .size()\
-                          .sort_index()
+    chrom_seg_cnt = (
+        matrix.reset_index()
+        .groupby('chromosome_idx')
+        .size()
+        .sort_index()
+    )
 
     chrom_seg_end = chrom_seg_cnt.cumsum()
     chrom_seg_mid = chrom_seg_end - chrom_seg_cnt / 2.0
@@ -605,9 +616,9 @@ def plot_cn_matrix(ax, matrix, segment_length=100000, norm_min=0.0, norm_max=1.0
     ax.set_xticks([0] + list(chrom_seg_end.values))
     ax.set_xticklabels([])
     ax.set_yticks(xrange(len(matrix.columns.values)))
-    ax.set_yticklabels([helpers.plot_ids[a] for a in matrix.columns.values])
+    ax.set_yticklabels(matrix.columns.values)
     ax.xaxis.set_minor_locator(matplotlib.ticker.FixedLocator(chrom_seg_mid))
-    ax.xaxis.set_minor_formatter(matplotlib.ticker.FixedFormatter(plots.utils.chromosomes))
+    ax.xaxis.set_minor_formatter(matplotlib.ticker.FixedFormatter(wgs_analysis.refgenome.info.chromosomes))
     ax.xaxis.grid(True, which='major', color='white', linestyle='-', linewidth=2)
     ax.xaxis.grid(False, which='minor')
     ax.yaxis.grid(False, which='major')
