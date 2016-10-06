@@ -91,29 +91,29 @@ def plot_cnv_segments(ax, cnv):
             plot_connectors(ax, row, next_row, 'minor_raw', color_minor)
 
 
-def plot_cnv_genome(ax, cnv, site_id, maxcopies=4, minlength=1000):
+def plot_cnv_genome(ax, cnv, sample_id, maxcopies=4, minlength=1000):
     """
     Plot major/minor copy number across the genome
 
     Args:
         ax (matplotlib.axes.Axes): plot axes
         cnv (pandas.DataFrame): `cnv_site` table
-        site_id (str): site to plot
+        sample_id (str): site to plot
         maxcopies (int): maximum number of copies for setting y limits
         minlength (int): minimum length of segments to be drawn
 
     """
 
-    cnv = cnv[cnv['site_id'] == site_id].copy()
+    cnv = cnv[cnv['sample_id'] == sample_id].copy()
 
-    cnv = cnv[['chrom', 'start', 'end', 'length', 'major_raw', 'minor_raw']]
+    cnv = cnv[['chromosome', 'start', 'end', 'length', 'major_raw', 'minor_raw']]
 
     cnv = cnv[cnv['length'] >= minlength]
     
-    cnv = cnv[cnv['chrom'].isin(plots.utils.chromosomes)]
+    cnv = cnv[cnv['chromosome'].isin(wgs_analysis.refgenome.info.chromosomes)]
 
-    cnv.set_index('chrom', inplace=True)
-    cnv['chromosome_start'] = plots.utils.chromosome_start
+    cnv.set_index('chromosome', inplace=True)
+    cnv['chromosome_start'] = wgs_analysis.refgenome.info.chromosome_start
     cnv.reset_index(inplace=True)
 
     cnv['start'] = cnv['start'] + cnv['chromosome_start']
@@ -127,25 +127,25 @@ def plot_cnv_genome(ax, cnv, site_id, maxcopies=4, minlength=1000):
     ax.spines['right'].set_visible(False)
     
     ax.set_ylim((-0.05*maxcopies, maxcopies+.6))
-    ax.set_xlim((-0.5, plots.utils.chromosome_end.max()))
-    ax.set_xlabel('chrom')
-    ax.set_xticks([0] + list(plots.utils.chromosome_end.values))
+    ax.set_xlim((-0.5, wgs_analysis.refgenome.info.chromosome_end.max()))
+    ax.set_xlabel('chromosome')
+    ax.set_xticks([0] + list(wgs_analysis.refgenome.info.chromosome_end.values))
     ax.set_xticklabels([])
     ax.xaxis.tick_bottom()
     ax.yaxis.tick_left()
-    ax.set_ylabel(helpers.plot_ids[site_id])
-    ax.xaxis.set_minor_locator(matplotlib.ticker.FixedLocator(plots.utils.chromosome_mid))
-    ax.xaxis.set_minor_formatter(matplotlib.ticker.FixedFormatter(plots.utils.chromosomes))
+    ax.set_ylabel(sample_id)
+    ax.xaxis.set_minor_locator(matplotlib.ticker.FixedLocator(wgs_analysis.refgenome.info.chromosome_mid))
+    ax.xaxis.set_minor_formatter(matplotlib.ticker.FixedFormatter(wgs_analysis.refgenome.info.chromosomes))
 
 
-def plot_cnv_chromosome(ax, cnv, site_id, chromosome, start=None, end=None, maxcopies=4, minlength=1000, fontsize=None):
+def plot_cnv_chromosome(ax, cnv, sample_id, chromosome, start=None, end=None, maxcopies=4, minlength=1000, fontsize=None):
     """
     Plot major/minor copy number across a chromosome
 
     Args:
         ax (matplotlib.axes.Axes): plot axes
         cnv (pandas.DataFrame): `cnv_site` table
-        site_id (str): site to plot
+        sample_id (str): site to plot
         chromosome (str): chromosome to plot
         start (int): start of range in chromosome to plot
         end (int): start of range in chromosome to plot
@@ -154,9 +154,9 @@ def plot_cnv_chromosome(ax, cnv, site_id, chromosome, start=None, end=None, maxc
 
     """
 
-    cnv = cnv[cnv['site_id'] == site_id]
+    cnv = cnv[cnv['sample_id'] == sample_id]
     
-    cnv = cnv.loc[(cnv['chrom'] == chromosome)]
+    cnv = cnv.loc[(cnv['chromosome'] == chromosome)]
     cnv = cnv.loc[(cnv['length'] >= minlength)]
 
     cnv['genomic_length'] = cnv['end'] - cnv['start']
@@ -177,7 +177,7 @@ def plot_cnv_chromosome(ax, cnv, site_id, chromosome, start=None, end=None, maxc
     ax.set_xlim((start, end))
     ax.set_ylim((-0.05*maxcopies, maxcopies+.6))
     
-    ax.set_ylabel(helpers.plot_ids[site_id])
+    ax.set_ylabel(helpers.plot_ids[sample_id])
 
     x_ticks_mb = ['{0:.3g}M'.format(x/1000000.) for x in ax.get_xticks()]
     
@@ -211,11 +211,11 @@ def plot_cnv(cnv, site_ids, chromosome, start=None, end=None, maxcopies=2):
     
     num_sites = len(site_ids)
 
-    for fig_idx, site_id in enumerate(site_ids):
+    for fig_idx, sample_id in enumerate(site_ids):
         
         ax = plots.utils.setup_axes(plt.subplot(num_sites, 1, fig_idx+1))
         
-        plots.cnv.plot_cnv_chromosome(ax, cnv, site_id, chromosome, start=start, end=end, maxcopies=maxcopies)
+        plots.cnv.plot_cnv_chromosome(ax, cnv, sample_id, chromosome, start=start, end=end, maxcopies=maxcopies)
 
         if fig_idx != num_sites - 1:
             ax.set_xticklabels([])
@@ -223,7 +223,7 @@ def plot_cnv(cnv, site_ids, chromosome, start=None, end=None, maxcopies=2):
             ax.spines['bottom'].set_visible(False)
             ax.xaxis.set_ticks_position('none')
 
-        site_axes[site_id] = ax
+        site_axes[sample_id] = ax
         
     plt.tight_layout()
     
@@ -249,14 +249,14 @@ def plot_cnv_brks(cnv, brks, site_ids, chromosome, start=None, end=None, maxcopi
     
     num_sites = len(site_ids)
 
-    for fig_idx, site_id in enumerate(site_ids):
+    for fig_idx, sample_id in enumerate(site_ids):
         
-        site_brks = brks[brks['site_id'] == site_id]
+        site_brks = brks[brks['sample_id'] == sample_id]
         
         ax = plots.utils.setup_axes(plt.subplot(num_sites, 1, fig_idx+1))
         
-        plots.cnv.plot_cnv_chromosome(ax, cnv, site_id, chromosome, start=start, end=end, maxcopies=maxcopies)
-        plots.positions.plot_breakends(ax, brks, site_id, chromosome, start=start, end=end)
+        plots.cnv.plot_cnv_chromosome(ax, cnv, sample_id, chromosome, start=start, end=end, maxcopies=maxcopies)
+        plots.positions.plot_breakends(ax, brks, sample_id, chromosome, start=start, end=end)
 
         if fig_idx != num_sites - 1:
             ax.set_xticklabels([])
@@ -264,7 +264,7 @@ def plot_cnv_brks(cnv, brks, site_ids, chromosome, start=None, end=None, maxcopi
             ax.spines['bottom'].set_visible(False)
             ax.xaxis.set_ticks_position('none')
 
-        site_axes[site_id] = ax
+        site_axes[sample_id] = ax
         
     plt.tight_layout()
     
@@ -273,11 +273,11 @@ def plot_cnv_brks(cnv, brks, site_ids, chromosome, start=None, end=None, maxcopi
 
 def plot_cnv_scatter(ax, cnv, site, chromosome_color, point_alpha=1.0, line_alpha=1.0):
 
-    cnv = cnv[cnv['site_id'] == site]
+    cnv = cnv[cnv['sample_id'] == site]
 
     cnv = cnv[cnv['length'] >= 10000]
     
-    cnv = cnv.set_index(['chrom', 'start', 'end'])
+    cnv = cnv.set_index(['chromosome', 'start', 'end'])
 
     cs = [chromosome_color[c[0]] for c in cnv.index.values]
     sz = cnv['length'] / 100000.
@@ -290,7 +290,7 @@ def plot_cnv_scatter(ax, cnv, site, chromosome_color, point_alpha=1.0, line_alph
 
 def plot_cnv_scatter_pairwise(ax, cnv, site_a, site_b, chromosome_color, point_alpha=1.0, line_alpha=1.0):
 
-    cnv = cnv.set_index(['chrom', 'start', 'end', 'site_id']).unstack()
+    cnv = cnv.set_index(['chromosome', 'start', 'end', 'sample_id']).unstack()
     cnv = cnv.fillna(0.0)
 
     cs = [chromosome_color[c[0]] for c in cnv.index.values]
@@ -305,20 +305,20 @@ def plot_cnv_scatter_pairwise(ax, cnv, site_a, site_b, chromosome_color, point_a
 
 def plot_patient_cnv(cnv):
 
-    sites = cnv['site_id'].unique()
+    sites = cnv['sample_id'].unique()
 
     plots.utils.setup_plot()
     fig = plt.figure(figsize=(12,5*len(sites)))
 
     chromosome_color = plots.colors.create_chromosome_color_map()
 
-    for idx, site_id in enumerate(sites):
+    for idx, sample_id in enumerate(sites):
         ax = plots.utils.setup_axes(plt.subplot(len(sites), 1, idx+1))
-        plot_cnv_scatter(ax, cnv, site_id, chromosome_color)
+        plot_cnv_scatter(ax, cnv, sample_id, chromosome_color)
         if idx == len(sites) - 1:
             ax.set_xlabel('major copy number')
             ax.set_ylabel('minor copy number')
-        ax.set_title(helpers.plot_ids[site_id] + ' copies')
+        ax.set_title(helpers.plot_ids[sample_id] + ' copies')
 
     fig.legend([plt.Circle((0, 0), radius=1, color=color) for chrom, color in chromosome_color.items()], chromosome_color.keys(), loc="lower right")
 
@@ -329,7 +329,7 @@ def plot_patient_cnv(cnv):
 
 def plot_cnv_pairwise(ax, cnv, site_a, site_b, chromosome_color, highlighted_chromosomes=None):
 
-    cnv = cnv[(cnv['site_id'] == site_a) | (cnv['site_id'] == site_b)]
+    cnv = cnv[(cnv['sample_id'] == site_a) | (cnv['sample_id'] == site_b)]
     
     cnv = algorithms.cnv.cluster_copies(cnv)
     
@@ -338,15 +338,15 @@ def plot_cnv_pairwise(ax, cnv, site_a, site_b, chromosome_color, highlighted_chr
     if highlighted_chromosomes is None:
         plot_cnv_scatter_pairwise(ax, cnv, site_a, site_b, chromosome_color, 1.0, 0.5)
     else:
-        plot_cnv_scatter_pairwise(ax, cnv[~(cnv['chrom'].isin(highlighted_chromosomes))], site_a, site_b, chromosome_color, 0.1, 0.1)
-        plot_cnv_scatter_pairwise(ax, cnv[cnv['chrom'].isin(highlighted_chromosomes)], site_a, site_b, chromosome_color, 1.0, 1.0)
+        plot_cnv_scatter_pairwise(ax, cnv[~(cnv['chromosome'].isin(highlighted_chromosomes))], site_a, site_b, chromosome_color, 0.1, 0.1)
+        plot_cnv_scatter_pairwise(ax, cnv[cnv['chromosome'].isin(highlighted_chromosomes)], site_a, site_b, chromosome_color, 1.0, 1.0)
 
     ax.grid(True)
 
 
 def plot_patient_cnv_pairwise(fig, cnv, highlighted_chromosomes=None):
 
-    pairs = list(itertools.combinations(cnv['site_id'].unique(), 2))
+    pairs = list(itertools.combinations(cnv['sample_id'].unique(), 2))
 
     chromosome_color = plots.colors.create_chromosome_color_map()
 
@@ -388,7 +388,7 @@ def create_uniform_segments(segment_length):
     chroms = chroms.astype(str)
     starts = starts.astype(int) + 1
 
-    segments = pd.DataFrame({'chrom':chroms, 'start':starts})
+    segments = pd.DataFrame({'chromosome':chroms, 'start':starts})
     segments['end'] = segments['start'] + segment_length - 1
 
     return segments
@@ -416,17 +416,17 @@ def uniform_resegment(cnv, segment_length=100000):
     assert cnv['start'].min() >= 1
 
     # Uniquely index segments
-    cnv = cnv[['chrom', 'start', 'end']].drop_duplicates()
+    cnv = cnv[['chromosome', 'start', 'end']].drop_duplicates()
     cnv['idx'] = xrange(len(cnv.index))
 
     # Set of start coordinates
-    cn_starts = cnv[['idx', 'chrom', 'start']]
+    cn_starts = cnv[['idx', 'chromosome', 'start']]
 
     # Create a table of fill segments
-    cn_fill = cnv[['chrom', 'end']].rename(columns={'end':'start'})
+    cn_fill = cnv[['chromosome', 'end']].rename(columns={'end':'start'})
 
     # Annotate last segment of each chromosome
-    cn_fill.set_index('chrom', inplace=True)
+    cn_fill.set_index('chromosome', inplace=True)
     cn_fill['max_start'] = cn_fill.groupby(level=0)['start'].max()
     cn_fill.reset_index(inplace=True)
 
@@ -436,21 +436,21 @@ def uniform_resegment(cnv, segment_length=100000):
     cn_fill = cn_fill.drop_duplicates()
 
     # Add fill starts to original segment starts
-    cn_starts = cn_starts.merge(cn_fill, on=['chrom', 'start'], how='outer')
+    cn_starts = cn_starts.merge(cn_fill, on=['chromosome', 'start'], how='outer')
     cn_starts['idx'] = cn_starts['idx'].fillna(-1).astype(int)
 
     # Create table of uniform segment starts
-    uniform_starts = create_uniform_segments(segment_length)[['chrom', 'start']]
+    uniform_starts = create_uniform_segments(segment_length)[['chromosome', 'start']]
 
     # Create a union set of segment start points
-    union_starts = cn_starts.merge(uniform_starts, on=['chrom', 'start'], how='outer')
+    union_starts = cn_starts.merge(uniform_starts, on=['chromosome', 'start'], how='outer')
 
     # Intermediate start coordinates with NAN index are uniform segment
     # boundaries for uniform segments that intersect original segments.
     # Set the idx for these to that of the previous start to mark them
     # as a continuation of the previous original segment that has been
     # cut somewhere in the middle.
-    union_starts = union_starts.sort(['chrom', 'start'])
+    union_starts = union_starts.sort(['chromosome', 'start'])
     union_starts['idx'] = union_starts['idx'].fillna(method='ffill').astype(int)
     union_starts = union_starts[union_starts['idx'] != -1]
 
@@ -482,20 +482,20 @@ def uniform_segment_copies(cnv, columns, segment_length=100000):
     Returns:
         pandas.DataFrame: resegmented table
 
-    The cnv table should have site_id, chrom, start and end columns in addition to
+    The cnv table should have sample_id, chrom, start and end columns in addition to
     the columns for which resegmentation is requested.  Returns a resegmented table
-    with site_id, chrom, segment_start, segment_end columns, in addition to the 
+    with sample_id, chrom, segment_start, segment_end columns, in addition to the 
     requested columns calculated as length weighted averages of the original values.
     """
 
     cnv_reseg = uniform_resegment(cnv, segment_length=100000)
 
-    cnv_reseg = cnv_reseg.merge(cnv, on=['chrom', 'start', 'end'])
+    cnv_reseg = cnv_reseg.merge(cnv, on=['chromosome', 'start', 'end'])
 
     cnv_reseg['segment_start'] = cnv_reseg['start_reseg'] / segment_length
     cnv_reseg['segment_start'] = cnv_reseg['segment_start'].astype(int) * segment_length + 1
 
-    cnv_reseg.set_index(['site_id', 'chrom', 'segment_start'], inplace=True)
+    cnv_reseg.set_index(['sample_id', 'chromosome', 'segment_start'], inplace=True)
 
     # Average requested columns weighted by length of segment
     # exclude null values in calculation
@@ -522,9 +522,9 @@ def uniform_segment_copies(cnv, columns, segment_length=100000):
 
     # Ensure the segments are consistent regardless of the cnv data
     seg_full = create_uniform_segments(segment_length).rename(columns={'start':'segment_start'})\
-                                                      .set_index(['chrom', 'segment_start'])
+                                                      .set_index(['chromosome', 'segment_start'])
 
-    cnv_reseg = cnv_reseg.set_index(['chrom', 'segment_start', 'site_id'])\
+    cnv_reseg = cnv_reseg.set_index(['chromosome', 'segment_start', 'sample_id'])\
                          .unstack()\
                          .reindex(seg_full.index)\
                          .stack(dropna=False)\
@@ -537,7 +537,7 @@ def uniform_segment_copies(cnv, columns, segment_length=100000):
 
 def plot_loh(ax, segment_table, stats_table, segment_length=100000):
 
-    index_cols = ['chrom', 'segment_start', 'site_id']
+    index_cols = ['chromosome', 'segment_start', 'sample_id']
 
     minor = segment_table.set_index(index_cols)['minor_raw']\
                          .unstack()\
@@ -551,16 +551,16 @@ def plot_loh(ax, segment_table, stats_table, segment_length=100000):
 
 def plot_total(ax, segment_table, stats_table, segment_length=100000):
 
-    index_cols = ['chrom', 'segment_start', 'site_id']
+    index_cols = ['chromosome', 'segment_start', 'sample_id']
 
     segment_matrix = segment_table.set_index(index_cols)[['major_raw', 'minor_raw']].unstack()
 
     total = segment_matrix['major_raw'] + segment_matrix['minor_raw']
 
-    ploidy = stats_table.set_index('site_id')['ploidy']
+    ploidy = stats_table.set_index('sample_id')['ploidy']
 
-    for site_id in total.keys():
-        total[site_id] /= ploidy[site_id]
+    for sample_id in total.keys():
+        total[sample_id] /= ploidy[sample_id]
 
     total = total.fillna(1.0)
     
@@ -569,7 +569,7 @@ def plot_total(ax, segment_table, stats_table, segment_length=100000):
 
 def plot_subclonal(ax, segment_table, stats_table, segment_length=100000):
 
-    index_cols = ['chrom', 'segment_start', 'site_id']
+    index_cols = ['chromosome', 'segment_start', 'sample_id']
 
     subclonal = segment_table.set_index(index_cols)['subclonal']\
                              .unstack()\
