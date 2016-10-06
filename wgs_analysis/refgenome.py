@@ -16,11 +16,12 @@ class RefGenomeInfo(object):
 
             genome_fasta_index = pkg_resources.resource_filename('wgs_analysis', 'data/GRCh37-lite.fa.fai')
 
-            self.chromosome_lengths = pd.Series(read_chromosome_lengths(genome_fasta_index)).reindex(self.chromosomes)
+            self.chromosome_lengths = pd.Series(read_chromosome_lengths(genome_fasta_index)).reindex(self.chromosomes).astype(int)
 
             self.chromosome_end = np.cumsum(self.chromosome_lengths)
             self.chromosome_start = self.chromosome_end.shift(1)
             self.chromosome_start[0] = 0
+            self.chromosome_start = self.chromosome_start.astype(int)
             self.chromosome_mid = (self.chromosome_start + self.chromosome_end) / 2.
 
 info = None
