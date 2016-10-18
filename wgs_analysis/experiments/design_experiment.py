@@ -116,7 +116,6 @@ def design_experiment(patient_id, experiment_id, experiment_type, genome_fasta, 
     KwArgs:
         snvs(pandas.DataFrame) : SNVs selected for primer design
         breakpoints(pandas.DataFrame) : Breakpoints selected for primer design
-        experiment_type(str) : 
 
     Breakpoints and SNVs are given as pandas tables with the following required columns:
      * seq_id : unique identifier for the SNV/breakpoint
