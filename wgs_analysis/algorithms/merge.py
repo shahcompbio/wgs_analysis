@@ -40,5 +40,7 @@ def position_segment_merge(positions, segments):
                     (merged['coord'] <= merged['end'])]
 
     merged = merged.drop(['is_pos', 'chrom_1'], axis=1)
+    merged['start'] = merged['start'].astype(int)
+    merged['end'] = merged['end'].astype(int)
 
     return merged
