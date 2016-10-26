@@ -26,7 +26,7 @@ def position_segment_merge(positions, segments):
     segments['is_pos'] = 0
     
     merged = pd.concat([positions, segments], ignore_index=True)\
-               .sort(['chrom', 'coord', 'is_pos'])\
+               .sort_values(['chrom', 'coord', 'is_pos'])\
                .drop_duplicates()
     
     merged['chrom_1'] = merged['chrom_1'].fillna(method='ffill')
