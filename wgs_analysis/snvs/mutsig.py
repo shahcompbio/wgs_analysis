@@ -17,6 +17,15 @@ def plot_cohort_mutation_signatures(
     snvs_table,
     snv_nodes_table,
 ):
+    """ Plot cohort wide clone specific mutation signatures.
+    
+    Args:
+        sig_prob_filename (str): cosmic signature probability matrix
+        snvs_table (pandas.DataFrame): table of per snv information including Trinucleotide
+        snv_nodes_table (pandas.DataFrame): table of per snv per clone information
+        
+    """
+    
     results = {}
 
     sig_prob = pd.read_csv(sig_prob_filename, sep='\t')
