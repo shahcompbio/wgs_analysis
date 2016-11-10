@@ -36,13 +36,13 @@ default_primer3_parameters = {
     'PRIMER_NUM_NS_ACCEPTED': 0,
     'PRIMER_FILE_FLAG': 0,
     'PRIMER_PICK_INTERNAL_OLIGO': 0,
-    'PRIMER_MIN_TM': 58,.0
-    'PRIMER_OPT_TM': 60,.0
-    'PRIMER_MAX_TM': 62,.0
+    'PRIMER_MIN_TM': 58.0,
+    'PRIMER_OPT_TM': 60.0,
+    'PRIMER_MAX_TM': 62.0,
     'PRIMER_MAX_POLY_X': 4,
     'PRIMER_THERMODYNAMIC_TEMPLATE_ALIGNMENT': 1,
-    'PRIMER_THERMODYNAMIC_PARAMETERS_PATH': '{primer3_dir}/primer3_config/'.format(primer3_dir=primer3_dir)
-    'PRIMER_MISPRIMING_LIBRARY': '{primer3_dir}/humrep_and_simple.txt'.format(primer3_dir=primer3_dir)
+    'PRIMER_THERMODYNAMIC_PARAMETERS_PATH': '{primer3_dir}/primer3_config/'.format(primer3_dir=primer3_dir),
+    'PRIMER_MISPRIMING_LIBRARY': '{primer3_dir}/humrep_and_simple.txt'.format(primer3_dir=primer3_dir),
 }
 
 
@@ -86,10 +86,10 @@ def run_primer3(sequence, req, params=None):
     primers = list()
 
     primer3_parameters = default_primer3_parameters.copy()
-    primer3_parameters['PRIMER_PRODUCT_SIZE_RANGE'] = '{0}-{1}\n'.format(req['min_product_size'], req['max_product_size'])
-    primer3_parameters['PRIMER_OPT_SIZE'] = '{0}\n'.format(req['opt_size'])
+    primer3_parameters['PRIMER_PRODUCT_SIZE_RANGE'] = '{0}-{1}'.format(req['min_product_size'], req['max_product_size'])
+    primer3_parameters['PRIMER_OPT_SIZE'] = '{0}'.format(req['opt_size'])
     if req['gc_clamp'] >= 0:
-        primer3_parameters['PRIMER_GC_CLAMP' = '{0}\n'.format(req['gc_clamp'])
+        primer3_parameters['PRIMER_GC_CLAMP'] = '{0}'.format(req['gc_clamp'])
 
     if params is not None:
         primer3_parameters.update(params)
@@ -222,7 +222,7 @@ def pick_primers(requirements, seq_data, design_callback=None, max_stage=-1, max
             if max_stage >= 0 and req_row['stage'] > max_stage:
                 continue
 
-            primers = run_primer3(sequence, req_row, primer3_params=primer3_params)
+            primers = run_primer3(sequence, req_row, params=primer3_params)
             primers['seq_id'] = seq_id
 
             if len(primers.index) == 0:
