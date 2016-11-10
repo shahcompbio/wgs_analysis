@@ -86,17 +86,17 @@ def run_primer3(sequence, req, params=None):
     primers = list()
 
     primer3_parameters = default_primer3_parameters.copy()
+    primer3_parameters['PRIMER_PRODUCT_SIZE_RANGE'] = '{0}-{1}\n'.format(req['min_product_size'], req['max_product_size'])
+    primer3_parameters['PRIMER_OPT_SIZE'] = '{0}\n'.format(req['opt_size'])
+    if req['gc_clamp'] >= 0:
+        primer3_parameters['PRIMER_GC_CLAMP' = '{0}\n'.format(req['gc_clamp'])
+
     if params is not None:
         primer3_parameters.update(params)
 
     primer3_proc = subprocess.Popen(['primer3_core'], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
-
     primer3_proc.stdin.write('SEQUENCE_TEMPLATE={0}\n'.format(sequence))
     primer3_proc.stdin.write('SEQUENCE_TARGET={0},{1}\n'.format(req_target_start, req_target_size))
-    primer3_proc.stdin.write('PRIMER_PRODUCT_SIZE_RANGE={0}-{1}\n'.format(req['min_product_size'], req['max_product_size']))
-    primer3_proc.stdin.write('PRIMER_OPT_SIZE={0}\n'.format(req['opt_size']))
-    if req['gc_clamp'] >= 0:
-        primer3_proc.stdin.write('PRIMER_GC_CLAMP={0}\n'.format(req['gc_clamp']))
     for key, value in primer3_parameters.iteritems():
         primer3_proc.stdin.write('{}={}\n'.format(key, value))
     primer3_proc.stdin.write('=\n')
@@ -300,6 +300,3 @@ if __name__ == '__main__':
     with BlatServer(args.genome), open(args.sequences, 'r') as sequences_file:
         primer_table = design(args.requirements, design_utils.read_fasta(sequences_file))
         primer_table.to_csv(args.primers, sep='\t', index=False, na_rep='NA')
-
-
-
