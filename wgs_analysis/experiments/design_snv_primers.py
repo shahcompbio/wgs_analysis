@@ -15,6 +15,7 @@ import pandas as pd
 
 import design_utils
 import design_primers
+import blat_server
 
 
 def get_requirements_filename(experiment_type):
@@ -109,7 +110,7 @@ if __name__ == '__main__':
 
     snvs = pd.read_csv(args.snvs, sep='\t', converters={'chrom':str})[['chrom', 'coord']].drop_duplicates()
 
-    with design_primers.BlatServer([args.genome]):
+    with blat_server.BlatServer([args.genome]):
         primer_table = design(args.genome, snvs, args.varvcfs)
 
     primer_table.to_csv(args.primers, sep='\t', index=False, na_rep='NA')

@@ -6,6 +6,7 @@ import pandas as pd
 import wgs_analysis.experiments.design_primers as design_primers
 import wgs_analysis.experiments.design_snv_primers as design_snv_primers
 import wgs_analysis.experiments.design_break_primers as design_break_primers
+import blat_server
 
 
 
@@ -163,7 +164,7 @@ def design_experiment(patient_id, experiment_id, experiment_type, genome_fasta, 
 
     primer_table = list()
 
-    with design_primers.BlatServer(genome_fasta):
+    with blat_server.BlatServer(genome_fasta):
 
         if snvs is not None:
 
