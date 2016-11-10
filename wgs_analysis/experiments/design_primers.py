@@ -30,20 +30,20 @@ if primer3_core_ex is None:
 
 primer3_dir = os.path.dirname(os.path.realpath(primer3_core_ex))
 
-primer3_parameters = """\
-PRIMER_MIN_SIZE=18
-PRIMER_MAX_SIZE=26
-PRIMER_NUM_NS_ACCEPTED=0
-PRIMER_FILE_FLAG=0
-PRIMER_PICK_INTERNAL_OLIGO=0
-PRIMER_MIN_TM=58.0
-PRIMER_OPT_TM=60.0
-PRIMER_MAX_TM=62.0
-PRIMER_MAX_POLY_X=4
-PRIMER_THERMODYNAMIC_TEMPLATE_ALIGNMENT=1
-PRIMER_THERMODYNAMIC_PARAMETERS_PATH={primer3_dir}/primer3_config/
-PRIMER_MISPRIMING_LIBRARY={primer3_dir}/humrep_and_simple.txt
-""".format(primer3_dir=primer3_dir)
+default_primer3_parameters = {
+    'PRIMER_MIN_SIZE': 18,
+    'PRIMER_MAX_SIZE': 26,
+    'PRIMER_NUM_NS_ACCEPTED': 0,
+    'PRIMER_FILE_FLAG': 0,
+    'PRIMER_PICK_INTERNAL_OLIGO': 0,
+    'PRIMER_MIN_TM': 58,.0
+    'PRIMER_OPT_TM': 60,.0
+    'PRIMER_MAX_TM': 62,.0
+    'PRIMER_MAX_POLY_X': 4,
+    'PRIMER_THERMODYNAMIC_TEMPLATE_ALIGNMENT': 1,
+    'PRIMER_THERMODYNAMIC_PARAMETERS_PATH': '{primer3_dir}/primer3_config/'.format(primer3_dir=primer3_dir)
+    'PRIMER_MISPRIMING_LIBRARY': '{primer3_dir}/humrep_and_simple.txt'.format(primer3_dir=primer3_dir)
+}
 
 
 class BlatServer(object):
@@ -72,7 +72,7 @@ class BlatServer(object):
         self.gfserver_proc.kill()
 
 
-def run_primer3(sequence, req):
+def run_primer3(sequence, req, params=None):
     '''
     Run primer 3 and obtain a list of potential primers.
     '''
@@ -85,6 +85,10 @@ def run_primer3(sequence, req):
 
     primers = list()
 
+    primer3_parameters = default_primer3_parameters.copy()
+    if params is not None:
+        primer3_parameters.update(params)
+
     primer3_proc = subprocess.Popen(['primer3_core'], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
 
     primer3_proc.stdin.write('SEQUENCE_TEMPLATE={0}\n'.format(sequence))
@@ -93,7 +97,8 @@ def run_primer3(sequence, req):
     primer3_proc.stdin.write('PRIMER_OPT_SIZE={0}\n'.format(req['opt_size']))
     if req['gc_clamp'] >= 0:
         primer3_proc.stdin.write('PRIMER_GC_CLAMP={0}\n'.format(req['gc_clamp']))
-    primer3_proc.stdin.write(primer3_parameters)
+    for key, value in primer3_parameters.iteritems():
+        primer3_proc.stdin.write('{}={}\n'.format(key, value))
     primer3_proc.stdin.write('=\n')
     primer3_proc.stdin.close()
 
@@ -204,7 +209,7 @@ def run_alignment(primers):
     return alignment_infos
 
 
-def pick_primers(requirements, seq_data, design_callback=None, max_stage=-1, max_primers=-1):
+def pick_primers(requirements, seq_data, design_callback=None, max_stage=-1, max_primers=-1, primer3_params=None):
     '''
     Design primers, iteratively relaxing design requirements
     '''
@@ -217,7 +222,7 @@ def pick_primers(requirements, seq_data, design_callback=None, max_stage=-1, max
             if max_stage >= 0 and req_row['stage'] > max_stage:
                 continue
 
-            primers = run_primer3(sequence, req_row)
+            primers = run_primer3(sequence, req_row, primer3_params=primer3_params)
             primers['seq_id'] = seq_id
 
             if len(primers.index) == 0:
@@ -276,10 +281,10 @@ def pick_primers(requirements, seq_data, design_callback=None, max_stage=-1, max
     return primer_table
 
 
-def design(requirements_filename, sequences, design_callback=None, max_stage=-1, max_primers=-1):
+def design(requirements_filename, sequences, design_callback=None, max_stage=-1, max_primers=-1, primer3_params=None):
 
     requirements = pd.read_csv(requirements_filename, sep='\t')
-    primer_table = pick_primers(requirements, sequences, design_callback, max_stage, max_primers)
+    primer_table = pick_primers(requirements, sequences, design_callback=design_callback, max_stage=max_stage, max_primers=max_primers, primer3_params=primer3_params)
     return primer_table
 
 

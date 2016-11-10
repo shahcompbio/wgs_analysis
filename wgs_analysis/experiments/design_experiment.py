@@ -9,7 +9,7 @@ import wgs_analysis.experiments.design_break_primers as design_break_primers
 
 
 
-def design_categories(selection, designer, genome_fasta, seed=2014, **kwargs):
+def design_categories(selection, designer, genome_fasta, seed=2014, primer3_params=None, **kwargs):
     """ Design primers in groups with group specific requirements
 
     Args:
@@ -19,6 +19,7 @@ def design_categories(selection, designer, genome_fasta, seed=2014, **kwargs):
 
     KwArgs:
         seed(int) : random seed for shuffling
+        primer3_params(dict) : Additional Primer 3 Parameters
         kwargs : additional arguments to design function
 
     Returns:
@@ -48,7 +49,7 @@ def design_categories(selection, designer, genome_fasta, seed=2014, **kwargs):
         variants = variants.ix[shuffled_index]
 
         # Design primers
-        primers = designer(genome_fasta, variants, max_stage=max_primer_stage, max_primers=subset_count, **kwargs)
+        primers = designer(genome_fasta, variants, max_stage=max_primer_stage, max_primers=subset_count, primer3_params=primer3_params, **kwargs)
 
         # Warn if requirements not met
         if subset_count >= 0:
@@ -101,7 +102,7 @@ def print_design_stats(**kwargs):
 
 
 
-def design_experiment(patient_id, experiment_id, experiment_type, genome_fasta, variant_vcfs, snvs=None, breakpoints=None):
+def design_experiment(patient_id, experiment_id, experiment_type, genome_fasta, variant_vcfs, snvs=None, breakpoints=None, primer3_params=None):
     """
     Design primers for both SNVs and breakpoints and write to the appropriate location in the
     meta_data directory.
@@ -116,6 +117,7 @@ def design_experiment(patient_id, experiment_id, experiment_type, genome_fasta, 
     KwArgs:
         snvs(pandas.DataFrame) : SNVs selected for primer design
         breakpoints(pandas.DataFrame) : Breakpoints selected for primer design
+        primer3_params(dict) : Additional Primer 3 Parameters
 
     Breakpoints and SNVs are given as pandas tables with the following required columns:
      * seq_id : unique identifier for the SNV/breakpoint
@@ -169,7 +171,8 @@ def design_experiment(patient_id, experiment_id, experiment_type, genome_fasta, 
 
             snv_primers = design_categories(snvs, design_snv_primers.design,
                 genome_fasta, variant_vcfs=variant_vcfs,
-                requirements_filename=design_snv_primers.get_requirements_filename(experiment_type))
+                requirements_filename=design_snv_primers.get_requirements_filename(experiment_type),
+                primer3_params=primer3_params)
 
             snv_primers['variant_type'] = 'snv'
             snv_primers['strand'] = '+'
@@ -182,7 +185,8 @@ def design_experiment(patient_id, experiment_id, experiment_type, genome_fasta, 
 
             breakpoint_primers = design_categories(breakpoints, design_break_primers.design,
                 genome_fasta, variant_vcfs=variant_vcfs,
-                requirements_filename=design_break_primers.get_requirements_filename(experiment_type))
+                requirements_filename=design_break_primers.get_requirements_filename(experiment_type),
+                primer3_params=primer3_params)
 
             breakpoint_primers['variant_type'] = 'breakpoint'
             breakpoint_primers['ref'] = 'NA'

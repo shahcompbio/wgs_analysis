@@ -48,17 +48,20 @@ def create_breakpoint_sequences(genome_fasta, breakpoints, variant_vcfs=[]):
         yield seq_id, sequences[0] + '[]' + sequences[1]
 
 
-def design(genome_filename, breakpoints, variant_vcfs=[], requirements_filename=default_breakpoint_requirements, max_stage=-1, max_primers=-1):
+def design(genome_filename, breakpoints, variant_vcfs=[], requirements_filename=default_breakpoint_requirements, max_stage=-1, max_primers=-1, primer3_params=None):
     """
     Design primers for an breakpoint validation experiment
 
     Args:
         genome_filename(str) : genome file in fasta format
         breakpoints(pandas.DataFrame) : table of breakpoint information
+
+    KwArgs:
         variant_vcfs(list) : list of VCF files with germline variants
         requirements_filename(str) : requirements tsv file detailing design requirements by stage
         max_stage(int) : maximum stage before failing, -1 to try all stages
         max_primers(int) : maximum number of primers to design before returning
+        primer3_params(dict) : Additional Primer 3 Parameters
 
     Returns:
         pandas.DataFrame of primer information
@@ -72,7 +75,7 @@ def design(genome_filename, breakpoints, variant_vcfs=[], requirements_filename=
     """
     breakpoint_sequences = create_breakpoint_sequences(genome_filename, breakpoints, variant_vcfs)
 
-    primer_table = design_primers.design(requirements_filename, breakpoint_sequences, max_stage=max_stage, max_primers=max_primers)
+    primer_table = design_primers.design(requirements_filename, breakpoint_sequences, max_stage=max_stage, max_primers=max_primers, primer3_params=primer3_params)
 
     def calculate_product_start(row):
         return row['sequence'].index(row['left_primer']) + 1
