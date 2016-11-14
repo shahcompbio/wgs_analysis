@@ -21,6 +21,7 @@ import wgs_analysis.plots.utils
 import wgs_analysis.algorithms as algorithms
 import wgs_analysis.algorithms.cnv
 import wgs_analysis.refgenome
+import wgs_analysis.algorithms.merge
 
 
 def plot_cnv_segments(ax, cnv, major_col='major_raw', minor_col='minor_raw'):
@@ -362,7 +363,33 @@ def plot_patient_cnv_pairwise(fig, cnv, highlighted_chromosomes=None):
     plt.tight_layout()
 
 
-def create_uniform_segments(segment_length):
+def create_uniform_segments(segment_length, max_end):
+    """
+    Create a table of uniform segments with a given segment length
+
+    Args:
+        segment_length (int): uniform segment length
+        max_end (int): maximum end position of segments
+
+    Returns:
+        pandas.DataFrame: table of uniform segments
+
+    The returned table will have columns start, end.  Segments are created according
+    to given max end.
+    """
+
+    num_segments = np.ceil(float(max_end) / float(segment_length))
+
+    starts = np.arange(0, num_segments*segment_length, segment_length)
+    starts = starts.astype(int) + 1
+
+    segments = pd.DataFrame({'start':starts})
+    segments['end'] = segments['start'] + segment_length - 1
+
+    return segments
+
+
+def create_uniform_segments_genome(segment_length):
     """
     Create a table of uniform segments with a given segment length
 
@@ -372,7 +399,7 @@ def create_uniform_segments(segment_length):
     Returns:
         pandas.DataFrame: table of uniform segments
 
-    The returned table will have columns chrom, start, end.  Segments are created according
+    The returned table will have columns chromosome, start, end.  Segments are created according
     to chromosome lengths.
     """
 
@@ -401,73 +428,66 @@ def uniform_resegment(cnv, segment_length=100000):
     Returns:
         pandas.DataFrame: resegmented table
 
-    The cnv table should have columns chrom, start, end.  Returns a resegmented
-    table with columns chrom, start, end, start_reseg, end_reseg.  Original 
+    The cnv table should have columns start, end.  Returns a resegmented
+    table with columns start, end, start_reseg, end_reseg.  Original 
     rows will be represented multiple times if they are split by uniform segments,
-    and can be identified by having the same chrom, start, end.  The start_reseg
+    and can be identified by having the same start, end.  The start_reseg
     and end_reseg columns represent the subsegment resulting from the split.
     """
 
     # First segment cannot start at coordinate less than 1
     assert cnv['start'].min() >= 1
 
-    # Uniquely index segments
-    cnv = cnv[['chromosome', 'start', 'end']].drop_duplicates()
-    cnv['idx'] = xrange(len(cnv.index))
+    cnv['seg_idx'] = xrange(len(cnv.index))
 
-    # Set of start coordinates
-    cn_starts = cnv[['idx', 'chromosome', 'start']]
+    uniform_segments = create_uniform_segments(segment_length, cnv['end'].max())
+    uniform_segments['reseg_idx'] = xrange(len(uniform_segments.index))
 
-    # Create a table of fill segments
-    cn_fill = cnv[['chromosome', 'end']].rename(columns={'end':'start'})
+    # Find starts of the resegmentation that fall within cnv segments
+    seg_idx_1, reseg_idx_1 = wgs_analysis.algorithms.merge.interval_position_overlap(
+        cnv[['start', 'end']].values,
+        uniform_segments['start'].values)
+    reseg_1 = pd.DataFrame({'seg_idx': seg_idx_1, 'reseg_idx': reseg_idx_1})
 
-    # Annotate last segment of each chromosome
-    cn_fill.set_index('chromosome', inplace=True)
-    cn_fill['max_start'] = cn_fill.groupby(level=0)['start'].max()
-    cn_fill.reset_index(inplace=True)
+    # Find ends of the resegmentation that fall within cnv segments
+    seg_idx_2, reseg_idx_2 = wgs_analysis.algorithms.merge.interval_position_overlap(
+        cnv[['start', 'end']].values,
+        uniform_segments['end'].values)
+    reseg_2 = pd.DataFrame({'seg_idx': seg_idx_2, 'reseg_idx': reseg_idx_2})
 
-    # Last segment of each chromosome is wrapped around to be used as first segment in fill
-    cn_fill.loc[cn_fill['start'] == cn_fill['max_start'], 'start'] = 1
-    cn_fill = cn_fill.drop('max_start', axis=1)
-    cn_fill = cn_fill.drop_duplicates()
+    # Find starts of the cnv segments that fall within the resegmentation
+    reseg_idx_3, seg_idx_3 = wgs_analysis.algorithms.merge.interval_position_overlap(
+        uniform_segments[['start', 'end']].values,
+        cnv['start'].values)
+    reseg_3 = pd.DataFrame({'seg_idx': seg_idx_3, 'reseg_idx': reseg_idx_3})
 
-    # Add fill starts to original segment starts
-    cn_starts = cn_starts.merge(cn_fill, on=['chromosome', 'start'], how='outer')
-    cn_starts['idx'] = cn_starts['idx'].fillna(-1).astype(int)
+    reseg = pd.concat([reseg_1, reseg_2, reseg_3]).drop_duplicates()
+    
+    cnv = cnv.merge(reseg, on='seg_idx')
+    cnv = cnv.merge(uniform_segments, on='reseg_idx', suffixes=('', '_reseg'))
 
-    # Create table of uniform segment starts
-    uniform_starts = create_uniform_segments(segment_length)[['chromosome', 'start']]
+    return cnv
 
-    # Create a union set of segment start points
-    union_starts = cn_starts.merge(uniform_starts, on=['chromosome', 'start'], how='outer')
 
-    # Intermediate start coordinates with NAN index are uniform segment
-    # boundaries for uniform segments that intersect original segments.
-    # Set the idx for these to that of the previous start to mark them
-    # as a continuation of the previous original segment that has been
-    # cut somewhere in the middle.
-    union_starts = union_starts.sort(['chromosome', 'start'])
-    union_starts['idx'] = union_starts['idx'].fillna(method='ffill').astype(int)
-    union_starts = union_starts[union_starts['idx'] != -1]
+def uniform_resegment_genome(cnv, segment_length=100000):
+    """
+    Create a table of uniform segments data from arbitrary segments segment data
 
-    # Merge original segment information and select the end as the minimum
-    # of the original segment or the uniform segment for segments that have
-    # been cut
-    union_segments = union_starts.merge(cnv[['idx', 'end']], on='idx')
-    union_segments['end'] = np.minimum(union_segments['end'],
-                                       union_segments['start'] + segment_length - 1)
+    Args:
+        cnv (pandas.DataFrame): segment data
+        segment_length (int): uniform segment length
 
-    # Final segments will have original start and end, in addition to a
-    # resegmented start_1 and end_1
-    union_segments = union_segments.merge(cnv[['idx', 'start', 'end']], on='idx', suffixes=('_reseg', ''))
+    Returns:
+        pandas.DataFrame: resegmented table
 
-    union_segments = union_segments.drop('idx', axis=1)
+    The cnv table should have columns chromosome, start, end.  Returns a resegmented
+    table with columns chromosome, start, end, start_reseg, end_reseg.  Original 
+    rows will be represented multiple times if they are split by uniform segments,
+    and can be identified by having the same chromosome, start, end.  The start_reseg
+    and end_reseg columns represent the subsegment resulting from the split.
+    """
 
-    # Ensure resegmentation start and end are int
-    union_segments['start_reseg'] = union_segments['start_reseg'].astype(int)
-    union_segments['end_reseg'] = union_segments['end_reseg'].astype(int)
-
-    return union_segments
+    return cnv.groupby('chromosome').apply(lambda cnv: uniform_resegment(cnv, segment_length=100000))
 
 
 def uniform_segment_copies(cnv, columns, segment_length=100000):
@@ -488,7 +508,7 @@ def uniform_segment_copies(cnv, columns, segment_length=100000):
     requested columns calculated as length weighted averages of the original values.
     """
 
-    cnv_reseg = uniform_resegment(cnv, segment_length=100000)
+    cnv_reseg = uniform_resegment_genome(cnv, segment_length=100000)
 
     cnv_reseg = cnv_reseg.merge(cnv, on=['chromosome', 'start', 'end'])
 
@@ -521,8 +541,10 @@ def uniform_segment_copies(cnv, columns, segment_length=100000):
     cnv_reseg.reset_index(inplace=True)
 
     # Ensure the segments are consistent regardless of the cnv data
-    seg_full = create_uniform_segments(segment_length).rename(columns={'start':'segment_start'})\
-                                                      .set_index(['chromosome', 'segment_start'])
+    seg_full = (
+        create_uniform_segments_genome(segment_length)
+        .rename(columns={'start':'segment_start'})
+        .set_index(['chromosome', 'segment_start']))
 
     cnv_reseg = cnv_reseg.set_index(['chromosome', 'segment_start', 'sample_id'])\
                          .unstack()\
