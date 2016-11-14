@@ -15,7 +15,6 @@ import matplotlib.pyplot as plt
 from matplotlib.colors import colorConverter
 import seaborn
 
-import wgs_analysis.plots as plots
 import wgs_analysis.plots.colors
 import wgs_analysis.plots.positions
 import wgs_analysis.plots.utils
@@ -377,7 +376,7 @@ def create_uniform_segments(segment_length):
     to chromosome lengths.
     """
 
-    num_segments = (plots.utils.chromosome_lengths.astype(float) / segment_length).apply(np.ceil)
+    num_segments = (wgs_analysis.refgenome.info.chromosome_lengths.astype(float) / segment_length).apply(np.ceil)
 
     chroms = np.concatenate([np.repeat(c, n) for c, n in num_segments.iteritems()])
     starts = np.concatenate([np.arange(0, m*segment_length, segment_length) for c, m in num_segments.iteritems()])
@@ -463,6 +462,10 @@ def uniform_resegment(cnv, segment_length=100000):
     union_segments = union_segments.merge(cnv[['idx', 'start', 'end']], on='idx', suffixes=('_reseg', ''))
 
     union_segments = union_segments.drop('idx', axis=1)
+
+    # Ensure resegmentation start and end are int
+    union_segments['start_reseg'] = union_segments['start_reseg'].astype(int)
+    union_segments['end_reseg'] = union_segments['end_reseg'].astype(int)
 
     return union_segments
 
