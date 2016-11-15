@@ -251,6 +251,14 @@ def pick_primers(requirements, seq_data, design_callback=None, max_stage=-1, max
 
     sys.stderr.write('\n')
 
+    if len(primer_table) == 0:
+        return pd.DataFrame(columns=[
+            'primer_id', 'gc_clamp', 'left_primer', 'left_primer_length',
+            'left_tm', 'product_size', 'right_primer', 'right_primer_length',
+            'right_tm', 'sequence', 'stage', 'target_buffer', 'seq_id',
+            'product_count', 'left_alignment_count', 'right_alignment_count',
+            'product_start', 'product_end'])
+
     primer_table = pd.concat(primer_table, ignore_index=True)
 
     return primer_table
