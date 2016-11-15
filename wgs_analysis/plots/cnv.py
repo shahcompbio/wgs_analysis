@@ -444,27 +444,32 @@ def uniform_resegment(cnv, segment_length=100000):
     uniform_segments['reseg_idx'] = xrange(len(uniform_segments.index))
 
     # Find starts of the resegmentation that fall within cnv segments
-    seg_idx_1, reseg_idx_1 = wgs_analysis.algorithms.merge.interval_position_overlap(
+    seg_idx_1, reseg_idx_1 = wgs_analysis.algorithms.merge.interval_position_overlap_unsorted(
         cnv[['start', 'end']].values,
         uniform_segments['start'].values)
     reseg_1 = pd.DataFrame({'seg_idx': seg_idx_1, 'reseg_idx': reseg_idx_1})
 
     # Find ends of the resegmentation that fall within cnv segments
-    seg_idx_2, reseg_idx_2 = wgs_analysis.algorithms.merge.interval_position_overlap(
+    seg_idx_2, reseg_idx_2 = wgs_analysis.algorithms.merge.interval_position_overlap_unsorted(
         cnv[['start', 'end']].values,
         uniform_segments['end'].values)
     reseg_2 = pd.DataFrame({'seg_idx': seg_idx_2, 'reseg_idx': reseg_idx_2})
 
     # Find starts of the cnv segments that fall within the resegmentation
-    reseg_idx_3, seg_idx_3 = wgs_analysis.algorithms.merge.interval_position_overlap(
+    reseg_idx_3, seg_idx_3 = wgs_analysis.algorithms.merge.interval_position_overlap_unsorted(
         uniform_segments[['start', 'end']].values,
         cnv['start'].values)
     reseg_3 = pd.DataFrame({'seg_idx': seg_idx_3, 'reseg_idx': reseg_idx_3})
 
-    reseg = pd.concat([reseg_1, reseg_2, reseg_3]).drop_duplicates()
-    
+    reseg = pd.concat([reseg_1, reseg_2, reseg_3], ignore_index=True).drop_duplicates()
+
     cnv = cnv.merge(reseg, on='seg_idx')
     cnv = cnv.merge(uniform_segments, on='reseg_idx', suffixes=('', '_reseg'))
+
+    assert np.all(
+        ((cnv['start'] >= cnv['start_reseg']) & (cnv['start'] <= cnv['end_reseg'])) |
+        ((cnv['end'] >= cnv['start_reseg']) & (cnv['end'] <= cnv['end_reseg'])) |
+        ((cnv['start'] <= cnv['start_reseg']) & (cnv['end'] >= cnv['end_reseg'])))
 
     return cnv
 
