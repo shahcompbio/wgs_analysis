@@ -112,3 +112,26 @@ def interval_position_overlap(intervals, positions):
     return interval_idx, position_idx
 
 
+def interval_position_overlap_unsorted(intervals, positions):
+    """ Map intervals to contained positions
+
+    Args:
+        intervals (numpy.array): start and end of intervals with shape (N,2) for N intervals
+        positions (numpy.array): positions, length M
+
+    Returns:
+        numpy.array: interval index, length L (arbitrary)
+        numpy.array: position index, length L (same as interval index)
+
+    Given a set of possibly overlapping intervals, create a mapping of positions that are contained
+    within those intervals.
+
+    """
+
+    pos_sort_idx = np.argsort(positions)
+    rev_idx = np.arange(len(pos_sort_idx), dtype=int)[pos_sort_idx]
+
+    interval_idx, position_idx = interval_position_overlap(intervals, positions[pos_sort_idx])
+
+    return interval_idx, rev_idx[position_idx]
+
