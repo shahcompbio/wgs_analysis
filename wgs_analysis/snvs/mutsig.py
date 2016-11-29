@@ -83,7 +83,7 @@ def plot_cohort_mutation_signatures(
         return scipy.stats.mannwhitneyu(data[True], data[False])[1]
 
 
-    def plot_signature_boxplots(sample_sig, pvalue_threshold=0.05):
+    def plot_signature_boxplots(sample_sig, pvalue_threshold=0.01):
 
         # Show only signatures with p-value less than specified
         test_pvalue = sample_sig.apply(test_ancestral_descendant)
@@ -97,24 +97,22 @@ def plot_cohort_mutation_signatures(
 
         sig_order = np.sort(data['Signature'].unique().astype(int)).astype(str)
 
-        g = seaborn.FacetGrid(data, col='Signature', col_order=sig_order, margin_titles=True, sharey=False)
+        g = seaborn.FacetGrid(data, col='Signature', col_order=sig_order, col_wrap=5, margin_titles=True, sharey=False)
         g.map_dataframe(seaborn.boxplot, x='Branch', y='Proportion', fliersize=0., color='0.75')
         g.map_dataframe(seaborn.stripplot, x='Branch', y='Proportion', jitter=True, color='k',
             linewidth=0, split=False)
 
-        g.fig.set_size_inches((12., 3.))
-
-        for signature, ax in zip(g.col_names, g.axes[0]):
+        for signature, ax in zip(g.col_names, g.axes):
             ax.set_title('Signature {0}\n  (p = {1:.1e})'.format(signature, test_pvalue.loc[signature]))
             yticks = ax.get_yticks()
             ax.set_yticks(yticks[yticks >= 0.])
 
         new_xticklabels = list()
-        for label in (a.get_text() for a in g.axes[0,0].get_xticklabels()):
+        for label in (a.get_text() for a in g.axes[0].get_xticklabels()):
             n = len(data.loc[data['Branch'] == label, 'Sample'].unique())
             label = '{}\nn={}'.format(label, n)
             new_xticklabels.append(label)
-        g.axes[0,0].set_xticklabels(new_xticklabels)
+        g.axes[0].set_xticklabels(new_xticklabels)
 
         seaborn.despine(offset=10, trim=True)
 
