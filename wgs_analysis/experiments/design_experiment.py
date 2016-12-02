@@ -67,7 +67,7 @@ def design_categories(selection, designer, genome_fasta, seed=2014, primer3_para
 
     for seq_id, primers in primer_table.groupby('seq_id'):
         if len(primers) > 1:
-            warnings.warn('designed ' + str(len(primers)) + ' primers for sequence ' + str(seq_id))
+            warnings.warn('designed ' + str(len(primers)) + ' primers for sequence ' + str(seq_id) + ' in categories ' + ', '.join(primers['category']))
 
     return primer_table
 
