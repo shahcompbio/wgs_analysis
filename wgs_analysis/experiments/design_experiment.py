@@ -95,9 +95,11 @@ def print_design_stats(**kwargs):
             if subset_count < 0:
                 subset_count = len(category_events.index)
 
+            total_count = len(category_events.index)
+
             primer_pair_count += subset_count
 
-            print 'designing {0} for {1} {2}'.format(subset_count, category, event_type)
+            print 'designing {0}/{1} for {2} {3}'.format(subset_count, total_count, category, event_type)
 
     print 'designing {0} primer pairs'.format(primer_pair_count)
 
