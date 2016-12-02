@@ -38,8 +38,17 @@ def design_categories(selection, designer, genome_fasta, seed=2014, primer3_para
 
     primer_table = list()
 
+    excluded_events = set()
+
     # Design SNV primers for each category
     for category, variants in selection.groupby('category'):
+
+        # Remove variants for which we have already designed primers
+        variants = variants[~variants['seq_id'].isin(excluded_events)]
+
+        # Check if any variants remain to be designed for
+        if len(variants.index) == 0:
+            continue
 
         subset_count = variants['subset_count'].iloc[0]
         max_primer_stage = variants['max_primer_stage'].iloc[0]
@@ -62,6 +71,8 @@ def design_categories(selection, designer, genome_fasta, seed=2014, primer3_para
                     warnings.warn('no primers for variant ' + str(seq_id) + ' in category ' + category)
 
         primer_table.append(primers)
+
+        excluded_events.update(primers['seq_id'].values)
 
     primer_table = pd.concat(primer_table, ignore_index=True).drop_duplicates()
 
