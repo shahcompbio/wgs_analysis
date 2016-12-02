@@ -14,7 +14,7 @@ class BlatServer(object):
     Block until the server is up and accepting connections from clients.
     '''
     def __init__(self, genome_filename):
-        self.genome_filename = os.path.abspath(genome_filename) + '.2bit'
+        self.genome_filename = os.path.abspath(genome_filename)
     def __enter__(self):
         self.gfserver_proc = None
         server_exists = False
@@ -28,8 +28,8 @@ class BlatServer(object):
             return
         print 'Running gfServer for genome {}'.format(self.genome_filename)
         print 'To start gfServer directly, run:'
-        print '{} {}'.format(os.path.realpath(__file__), os.path.realpath(self.genome_filename))
-        self.gfserver_proc = subprocess.Popen(['gfServer', 'start', 'localhost', '8899', '-stepSize=5', self.genome_filename], stdout=subprocess.PIPE)
+        print 'python {} {}'.format(os.path.realpath(__file__), os.path.realpath(self.genome_filename))
+        self.gfserver_proc = subprocess.Popen(['gfServer', 'start', 'localhost', '8899', '-stepSize=5', self.genome_filename + '.2bit'], stdout=subprocess.PIPE)
         with design_utils.TempDirectory() as temps_dir:
             temp_fasta_filename = os.path.join(temps_dir, 'sequence.fa')
             temp_psl_filename = os.path.join(temps_dir, 'align.psl')
@@ -52,6 +52,8 @@ if __name__ == '__main__':
     argparser = argparse.ArgumentParser()
     argparser.add_argument('genome', help='genome fasta filename')
     args = argparser.parse_args()
-    with blat_server.BlatServer(args.genome):
-        pass
+    with BlatServer(args.genome):
+        while True:
+            time.sleep(100)
+
 
