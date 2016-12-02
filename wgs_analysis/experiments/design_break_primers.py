@@ -78,6 +78,9 @@ def design(genome_filename, breakpoints, variant_vcfs=[], requirements_filename=
 
     primer_table = design_primers.design(requirements_filename, breakpoint_sequences, max_stage=max_stage, max_primers=max_primers, primer3_params=primer3_params)
 
+    if len(primer_table.index) == 0:
+        return pd.DataFrame(columns=['seq_id'])
+
     def calculate_product_start(row):
         return row['sequence'].index(row['left_primer']) + 1
 
