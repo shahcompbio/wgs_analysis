@@ -116,6 +116,33 @@ def print_design_stats(**kwargs):
 
 
 
+def print_experiment_stats(**kwargs):
+    """
+    Print the number of events for which primers have been designed
+
+    Args:
+        kwargs : pandas.DataFrame tables of events with the format as described for design_seqval
+
+    """
+
+    primer_pair_count = 0
+
+    for event_type, events in kwargs.iteritems():
+
+        if events is None:
+            continue
+
+        for category, category_events in events.groupby('category'):
+            total_count = len(category_events.index)
+
+            primer_pair_count += total_count
+
+            print 'designed {0} for {1} {2}'.format(total_count, category, event_type)
+
+    print 'designing {0} primer pairs'.format(primer_pair_count)
+
+
+
 def design_experiment(patient_id, experiment_id, experiment_type, genome_fasta, variant_vcfs, snvs=None, breakpoints=None, primer3_params=None):
     """
     Design primers for both SNVs and breakpoints and write to the appropriate location in the
@@ -229,6 +256,10 @@ def design_experiment(patient_id, experiment_id, experiment_type, genome_fasta, 
     primer_table['patient_id'] = patient_id
 
     print 'designed {} primers'.format(len(primer_table.index))
+
+    print_experiment_stats(
+        snvs=primer_table[primer_table['variant_type'] == 'snv'],
+        breakpoints=primer_table[primer_table['variant_type'] == 'breakpoint'])
 
     return primer_table
 
