@@ -7,20 +7,6 @@ Subsetting of rearrangements and generation of derivative tables.
 
 import pandas as pd
 
-import wgs_analysis.params as params
-import wgs_analysis.annotation as annotation
-import wgs_analysis.annotation.rearrangement
-
-def expression_correlated(breakpoints, expression):
-
-    breakpoints = annotation.rearrangement.annotate_expression_correlation(breakpoints, expression)
-
-    selected_cluster_ids = breakpoints.loc[(breakpoints['expr_corr'] >= params.expression_correlation_threshold) |
-                                           (breakpoints['expr_corr'] <= -params.expression_correlation_threshold), 'cluster_id']
-
-    breakpoints = breakpoints[breakpoints['cluster_id'].isin(selected_cluster_ids.values)]
-
-    return breakpoints
 
 def get_brkend(brk, side, data_cols):
     cols = ['chromosome', 'strand', 'position']
@@ -29,6 +15,7 @@ def get_brkend(brk, side, data_cols):
     brkend = brkend.rename(columns=dict(zip(side_cols, cols)))
     brkend['side'] = side
     return brkend
+
 
 def get_brkends(brk, data_cols):
     brkends = pd.concat([get_brkend(brk, '1', data_cols),
