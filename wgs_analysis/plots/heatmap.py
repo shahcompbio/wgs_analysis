@@ -95,3 +95,5 @@ def intensity_heatmap(fig, df, sort_rows=True):
     cb.outline.set_linewidth(0)
     cb.dividers.set_linewidth(0)
     axcolor.set_ylabel('log(read count + 1)')
+
+    return Z
