@@ -24,6 +24,64 @@ import wgs_analysis.refgenome
 import wgs_analysis.algorithms.merge
 
 
+def create_segments(df, field):
+    segments = np.array([[df['start'].values, df[field].values], [df['end'].values, df[field].values]])
+    segments = np.transpose(segments, (2, 0, 1))
+    return segments
+
+
+def create_connectors(df, field):
+    prev = df.iloc[:-1].reset_index()
+    next = df.iloc[1:].reset_index()
+    mids = ((prev[field] + next[field]) / 2.0).values
+    prev_cnct = np.array([[prev['end'].values, prev[field].values], [prev['end'].values, mids]])
+    prev_cnct = np.transpose(prev_cnct, (2, 0, 1))
+    next_cnct = np.array([[next['start'].values, mids], [next['start'].values, next[field].values]])
+    next_cnct = np.transpose(next_cnct, (2, 0, 1))
+    return np.concatenate([prev_cnct, next_cnct])
+
+
+def create_quads(df, field):
+    quads = np.array([
+        [df['start'].values, np.zeros(len(df.index))],
+        [df['start'].values, df[field].values],
+        [df['end'].values, df[field].values],
+        [df['end'].values, np.zeros(len(df.index))],
+    ])
+    quads = np.transpose(quads, (2, 0, 1))
+    return quads
+
+
+def plot_segments(ax, cnv, value_col, color, fill=False):
+    """
+    Plot segment copy number as line plots
+
+    Args:
+        ax (matplotlib.axes.Axes): plot axes
+        cnv (pandas.DataFrame): cnv table
+        value_col (str): column name to plot
+        color (str or tuple): color of lines
+
+    Plot segment copy number as line plots.  The columns 'start' and 'end'
+    are expected and should be adjusted for full genome plots.  Values from
+    the column given by 'value_col' are plotted with color given by 'color'.
+
+    """ 
+
+    cnv = cnv.sort_values('start')
+
+    segments = create_segments(cnv, value_col)
+    ax.add_collection(matplotlib.collections.LineCollection(segments, colors=color, lw=1))
+
+    connectors = create_connectors(cnv, value_col)
+    ax.add_collection(matplotlib.collections.LineCollection(connectors, colors=color, lw=1))
+
+    if fill:
+        quad_color = colorConverter.to_rgba(color, alpha=0.5)
+        quads = create_quads(cnv, value_col)
+        ax.add_collection(matplotlib.collections.PolyCollection(quads, facecolors=quad_color, edgecolors=quad_color, lw=0))
+
+
 def plot_cnv_segments(ax, cnv, major_col='major_raw', minor_col='minor_raw'):
     """ Plot raw major/minor copy number as line plots
 
@@ -46,31 +104,6 @@ def plot_cnv_segments(ax, cnv, major_col='major_raw', minor_col='minor_raw'):
     quad_color_minor = colorConverter.to_rgba(segment_color_minor, alpha=0.5)
 
     cnv = cnv.sort_values('start')
-
-    def create_segments(df, field):
-        segments = np.array([[df['start'].values, df[field].values], [df['end'].values, df[field].values]])
-        segments = np.transpose(segments, (2, 0, 1))
-        return segments
-
-    def create_connectors(df, field):
-        prev = df.iloc[:-1].reset_index()
-        next = df.iloc[1:].reset_index()
-        mids = ((prev[field] + next[field]) / 2.0).values
-        prev_cnct = np.array([[prev['end'].values, prev[field].values], [prev['end'].values, mids]])
-        prev_cnct = np.transpose(prev_cnct, (2, 0, 1))
-        next_cnct = np.array([[next['start'].values, mids], [next['start'].values, next[field].values]])
-        next_cnct = np.transpose(next_cnct, (2, 0, 1))
-        return np.concatenate([prev_cnct, next_cnct])
-
-    def create_quads(df, field):
-        quads = np.array([
-            [df['start'].values, np.zeros(len(df.index))],
-            [df['start'].values, df[field].values],
-            [df['end'].values, df[field].values],
-            [df['end'].values, np.zeros(len(df.index))],
-        ])
-        quads = np.transpose(quads, (2, 0, 1))
-        return quads
 
     major_segments = create_segments(cnv, major_col)
     minor_segments = create_segments(cnv, minor_col)
@@ -513,7 +546,7 @@ def uniform_segment_copies(cnv, columns, segment_length=100000):
     requested columns calculated as length weighted averages of the original values.
     """
 
-    cnv_reseg = uniform_resegment_genome(cnv, segment_length=100000)
+    cnv_reseg = uniform_resegment_genome(cnv[['chromosome', 'start', 'end']], segment_length=100000)
 
     cnv_reseg = cnv_reseg.merge(cnv, on=['chromosome', 'start', 'end'])
 
