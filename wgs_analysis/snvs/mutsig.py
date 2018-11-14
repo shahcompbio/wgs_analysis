@@ -12,7 +12,7 @@ def reverse_complement(sequence):
     return sequence[::-1].translate(string.maketrans('ACTGactg','TGACtgac'))
 
 
-def fit_sample_signatures(snvs_table, subset_col):
+def fit_sample_signatures(snvs_table, sig_prob, subset_col):
 
     # Filter samples with fewer than 100 SNVs
     snv_counts = snvs_table.groupby(subset_col).size()
@@ -35,7 +35,7 @@ def fit_sample_signatures(snvs_table, subset_col):
 
 
 def plot_signature_heatmap(sample_sig):
-    g = seaborn.clustermap(sample_sig)
+    g = seaborn.clustermap(sample_sig, figsize=(8,5))
     g.ax_heatmap.set_yticklabels(g.ax_heatmap.get_yticklabels(), rotation=0)
     return g.fig
 
@@ -83,21 +83,10 @@ def plot_signature_boxplots(sample_sig, pvalue_threshold=0.01):
     return g.fig
 
 
-def plot_cohort_mutation_signatures(
-    sig_prob_filename,
-    snvs_table,
-    snv_nodes_table,
-):
-    """ Plot cohort wide clone specific mutation signatures.
-    
-    Args:
-        sig_prob_filename (str): cosmic signature probability matrix
-        snvs_table (pandas.DataFrame): table of per snv information including Trinucleotide
-        snv_nodes_table (pandas.DataFrame): table of per snv per clone information
-        
+def load_signature_probabilities():
+    """ Load a dataframe of cosmic signature probabilities.
     """
-    
-    results = {}
+    sig_prob_filename = pkg_resources.resource_filename('wgs_analysis', 'data/signatures_probabilities.tsv')
 
     sig_prob = pd.read_csv(sig_prob_filename, sep='\t')
 
@@ -121,6 +110,26 @@ def plot_cohort_mutation_signatures(
     signature_cols = filter(lambda a: a.startswith('Signature'), sig_prob.columns)
     sig_prob = sig_prob.set_index('tri_nuc_idx')[signature_cols]
 
+    return sigs, sig_prob
+
+
+def plot_cohort_mutation_signatures(
+    sig_prob_filename,
+    snvs_table,
+    snv_nodes_table,
+):
+    """ Plot cohort wide clone specific mutation signatures.
+
+    Args:
+        sig_prob_filename (str): cosmic signature probability matrix
+        snvs_table (pandas.DataFrame): table of per snv information including Trinucleotide
+        snv_nodes_table (pandas.DataFrame): table of per snv per clone information
+
+    """
+    sigs, sig_prob = load_signature_probabilities()
+
+    results = {}
+
     #
     # Per sample signatures
     #
@@ -132,7 +141,7 @@ def plot_cohort_mutation_signatures(
     snvs_table = snvs_table[snvs_table['alt_counts'] > 0]
 
     snvs_table['patient_sample_id'] = snvs_table['patient_id'] + '_' + snvs_table['sample_id']
-    sample_sig = fit_sample_signatures(snvs_table, 'patient_sample_id')
+    sample_sig = fit_sample_signatures(snvs_table, sig_prob, 'patient_sample_id')
 
     results['samples_table'] = sample_sig.copy()
     results['samples_heatmap'] = plot_signature_heatmap(sample_sig)
@@ -146,7 +155,7 @@ def plot_cohort_mutation_signatures(
     snv_nodes_table = snv_nodes_table.merge(cohort_tri_nuc)
 
     snv_nodes_table['patient_node_id'] = snv_nodes_table['patient_id'] + '_Node' + snv_nodes_table['node'].astype(str)
-    node_sig = fit_sample_signatures(snv_nodes_table, 'patient_node_id')
+    node_sig = fit_sample_signatures(snv_nodes_table, sig_prob, 'patient_node_id')
 
     results['node_table'] = node_sig.copy()
     results['node_heatmap'] = plot_signature_heatmap(node_sig)
