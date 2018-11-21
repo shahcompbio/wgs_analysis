@@ -528,36 +528,37 @@ def uniform_resegment_genome(cnv, segment_length=100000):
     return cnv.groupby('chromosome').apply(lambda cnv: uniform_resegment(cnv, segment_length=100000))
 
 
-def uniform_segment_copies(cnv, columns, segment_length=100000):
+def uniform_segment_copies(cnv, sample_column, data_columns, segment_length=100000):
     """
     Create a table of uniformly segmented data from arbitrarily segment data
 
     Args:
         cnv (pandas.DataFrame): segment data
-        columns (list): columns to resegment
+        sample_column (list): sample id column
+        data_columns (list): data columns to resegment
         segment_length (int): uniform segment length
 
     Returns:
         pandas.DataFrame: resegmented table
 
-    The cnv table should have sample_id, chrom, start and end columns in addition to
+    The cnv table should have sample_column, chrom, start and end columns in addition to
     the columns for which resegmentation is requested.  Returns a resegmented table
-    with sample_id, chrom, segment_start, segment_end columns, in addition to the 
+    with sample_column, chrom, segment_start, segment_end columns, in addition to the 
     requested columns calculated as length weighted averages of the original values.
     """
 
-    cnv_reseg = uniform_resegment_genome(cnv[['chromosome', 'start', 'end']], segment_length=100000)
+    cnv_reseg = uniform_resegment_genome(cnv[['chromosome', 'start', 'end']], segment_length=segment_length)
 
     cnv_reseg = cnv_reseg.merge(cnv, on=['chromosome', 'start', 'end'])
 
     cnv_reseg['segment_start'] = cnv_reseg['start_reseg'] / segment_length
     cnv_reseg['segment_start'] = cnv_reseg['segment_start'].astype(int) * segment_length + 1
 
-    cnv_reseg.set_index(['sample_id', 'chromosome', 'segment_start'], inplace=True)
+    cnv_reseg.set_index([sample_column, 'chromosome', 'segment_start'], inplace=True)
 
     # Average requested columns weighted by length of segment
     # exclude null values in calculation
-    for column in columns:
+    for column in data_columns:
 
         # Length of resegmented segments
         cnv_reseg['length_reseg'] = cnv_reseg['end_reseg'] - cnv_reseg['start_reseg'] + 1
@@ -567,8 +568,9 @@ def uniform_segment_copies(cnv, columns, segment_length=100000):
 
         # Normalize by total length of resegmented segments
         cnv_reseg['length_total_reseg'] = cnv_reseg.groupby(level=[0, 1, 2])['length_reseg'].sum()
-        cnv_reseg['weight_reseg'] = cnv_reseg['length_reseg'].astype(float) / \
-                                    cnv_reseg['length_total_reseg'].astype(float)
+        cnv_reseg['weight_reseg'] = (
+            cnv_reseg['length_reseg'].astype(float) /
+            cnv_reseg['length_total_reseg'].astype(float))
         cnv_reseg[column] *= cnv_reseg['weight_reseg']
 
         # Mask segments with null values from summation
@@ -584,11 +586,13 @@ def uniform_segment_copies(cnv, columns, segment_length=100000):
         .rename(columns={'start':'segment_start'})
         .set_index(['chromosome', 'segment_start']))
 
-    cnv_reseg = cnv_reseg.set_index(['chromosome', 'segment_start', 'sample_id'])\
-                         .unstack()\
-                         .reindex(seg_full.index)\
-                         .stack(dropna=False)\
-                         .reset_index()
+    cnv_reseg = (
+        cnv_reseg
+        .set_index(['chromosome', 'segment_start', sample_column])
+        .unstack()
+        .reindex(seg_full.index)
+        .stack(dropna=False)
+        .reset_index())
 
     cnv_reseg['segment_end'] = cnv_reseg['segment_start'] + segment_length - 1
 
