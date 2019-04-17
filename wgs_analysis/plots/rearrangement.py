@@ -30,7 +30,7 @@ def create_breakends(breakpoints, data_cols=[]):
     return breakends
 
 
-def chromosome_type_plot(ax, breakends, bin_size=20000000, rearrangement_types=None):
+def chromosome_type_plot(ax, breakends, bin_size=20000000, rearrangement_types=None, full_genome=True):
     if rearrangement_types is None:
         rearrangement_types = default_rearrangement_types
         rearrangement_type_colors = default_rearrangement_type_colors
@@ -47,7 +47,11 @@ def chromosome_type_plot(ax, breakends, bin_size=20000000, rearrangement_types=N
     breakends['plot_bin'] = breakends['plot_position'] / bin_size
     breakends['plot_bin'] = breakends['plot_bin'].astype(int)
 
-    plot_bin_starts = np.arange(0, refgenome.info.chromosome_end.max(), bin_size)
+    if full_genome:
+        plot_bin_starts = np.arange(0, refgenome.info.chromosome_end.max(), bin_size)
+    else:
+        min_x, max_x = breakends['plot_position'].min(), breakends['plot_position'].max()
+        plot_bin_starts = np.arange(min_x, max_x, bin_size)
     plot_bins = (plot_bin_starts / bin_size).astype(int)
 
     breakends = breakends[['prediction_id', 'plot_bin', 'rearrangement_type']].drop_duplicates()
@@ -68,7 +72,10 @@ def chromosome_type_plot(ax, breakends, bin_size=20000000, rearrangement_types=N
         else:
             accum_counts += count_table[rearrangement_type].values
 
-    ax.set_xlim((-0.5, refgenome.info.chromosome_end.max()))
+    if full_genome:
+        ax.set_xlim((-0.5, refgenome.info.chromosome_end.max()))
+    else:
+        ax.set_xlim((min_x, max_x))
     ax.set_xlabel('chromosome')
     ax.set_xticks([0] + list(refgenome.info.chromosome_end.values))
     ax.set_xticklabels([])
