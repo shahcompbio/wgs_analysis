@@ -160,7 +160,7 @@ def plot_polar_arc(ax, u1, u2, r, rt, color='k', lw=0.5):
     try:
         c = np.linalg.solve(a, b)
     except:
-        print u1, u2, r, rt
+        print(u1, u2, r, rt)
         raise
 
     xs = list()

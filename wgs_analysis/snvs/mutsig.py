@@ -1,5 +1,4 @@
 import os
-import string
 import seaborn
 import lda
 import scipy.stats
@@ -10,7 +9,7 @@ import pkg_resources
 
 
 def reverse_complement(sequence):
-    return sequence[::-1].translate(string.maketrans('ACTGactg','TGACtgac'))
+    return sequence[::-1].translate(str.maketrans('ACTGactg','TGACtgac'))
 
 
 def fit_sample_signatures(snvs_table, sig_prob, subset_col):
@@ -92,7 +91,7 @@ def load_signature_probabilities():
     sig_prob = pd.read_csv(sig_prob_filename, sep='\t')
 
     sig_prob['tri_nucleotide_context'] = sig_prob['Trinucleotide']
-    sig_prob['tri_nuc_idx'] = xrange(len(sig_prob.index))
+    sig_prob['tri_nuc_idx'] = range(len(sig_prob.index))
     sig_prob['ref'] = sig_prob['Substitution Type'].apply(lambda a: a.split('>')[0])
     sig_prob['alt'] = sig_prob['Substitution Type'].apply(lambda a: a.split('>')[1])
 
