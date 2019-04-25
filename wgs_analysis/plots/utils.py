@@ -38,9 +38,9 @@ def shift_lims(ax, x, y):
 
 
 def _filter_ticks(ticks, data_min, data_max):
-    ticks_before = filter(lambda a: a < data_min, ticks)
-    ticks_within = filter(lambda a: a >= data_min and a <= data_max, ticks)
-    ticks_after = filter(lambda a: a > data_max, ticks)
+    ticks_before = list(filter(lambda a: a < data_min, ticks))
+    ticks_within = list(filter(lambda a: a >= data_min and a <= data_max, ticks))
+    ticks_after = list(filter(lambda a: a > data_max, ticks))
 
     ticks = []
     if len(ticks_before) > 0:

@@ -2,8 +2,10 @@ import collections
 import numpy as np
 from scipy import stats
 
+
 def calculate_smoothed(position, adjacent, stddev):
     return np.sum(stats.norm(loc=position, scale=stddev).pdf(adjacent))
+
 
 def calculate_adjacent_density(positions, stddev):
     """ Smoothed position density
@@ -33,3 +35,26 @@ def calculate_adjacent_density(positions, stddev):
         right_bandwidth_positions.append(position)
     right_counts = list(reversed(right_counts))
     return np.array(left_counts) + np.array(right_counts)
+
+
+def calculate_adjacent_distance(positions):
+    """ Distance to nearest adjacent.
+
+    Args:
+        positions(numpy.array) : list of positions
+
+    Returns:
+        distances(numpy.array): list of distances
+
+    """
+    dist_adj = np.absolute(positions[:-1] - positions[1:])
+
+    dist_left = np.zeros(positions.shape) * np.inf
+    dist_left[1:] = dist_adj
+
+    dist_right = np.zeros(positions.shape) * np.inf
+    dist_right[:-1] = dist_adj
+
+    dist = np.minimum(dist_left, dist_right)
+
+    return dist

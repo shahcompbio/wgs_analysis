@@ -9,7 +9,8 @@ import itertools
 import numpy as np
 import seaborn
 
-import utils
+import wgs_analysis.plots.utils
+
 
 def add_depths(tree, depth):
     """ Add plot depths (y-axis) for noninformative branch lengths
@@ -141,8 +142,8 @@ def plot_tree(ax, tree, branch_length_attr=None, leaf_name_attr=None, extend_lea
     xs = [node.x for node in tree.nodes] + [0]
     ys = [node.y for node in tree.nodes] + [0]
 
-    utils.set_xlim_filter_ticks(ax, min(xs), max(xs))
-    utils.set_ylim_filter_ticks(ax, min(ys), max(ys))
+    wgs_analysis.plots.utils.set_xlim_filter_ticks(ax, min(xs), max(xs))
+    wgs_analysis.plots.utils.set_ylim_filter_ticks(ax, min(ys), max(ys))
 
     ax.grid(False)
 
@@ -181,13 +182,13 @@ def plot_tree(ax, tree, branch_length_attr=None, leaf_name_attr=None, extend_lea
             setup_axis(ax.xaxis, 'top')
 
     # Shift plot limits to allow for full visibility of lines
-    utils.shift_lims(ax, 2, 2)
+    wgs_analysis.plots.utils.shift_lims(ax, 2, 2)
 
     # Trim spines to ticks for both axes
-    utils.trim_spines_to_ticks(ax)
+    wgs_analysis.plots.utils.trim_spines_to_ticks(ax)
 
     # Set leaf names if we have an attribute to query from leaf nodes
-    leaf_ticks = xrange(len(list(tree.leaves)))
+    leaf_ticks = list(range(len(list(tree.leaves))))
     if leaf_name_attr is not None:
         leaf_names = [getattr(leaf, leaf_name_attr) for leaf in tree.leaves]
         if landscape:
