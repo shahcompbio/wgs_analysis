@@ -82,3 +82,40 @@ def snv_adjacent_distance_plot(ax, snvs):
 
     seaborn.despine(trim=True)
 
+
+def snv_count_plot(ax, snvs, bin_size=10000000, full_genome=True):
+    snvs = snvs.loc[(snvs['chrom'].isin(refgenome.info.chromosomes))].copy()
+
+    snvs.set_index('chrom', inplace=True)
+    snvs['chromosome_start'] = refgenome.info.chromosome_start
+    snvs.reset_index(inplace=True)
+
+    snvs['plot_position'] = snvs['coord'] + snvs['chromosome_start']
+    snvs['plot_bin'] = snvs['plot_position'] / bin_size
+    snvs['plot_bin'] = snvs['plot_bin'].astype(int)
+
+    if full_genome:
+        plot_bin_starts = np.arange(0, refgenome.info.chromosome_end.max(), bin_size)
+    else:
+        min_x, max_x = snvs['plot_position'].min(), snvs['plot_position'].max()
+        plot_bin_starts = np.arange(min_x, max_x, bin_size)
+    plot_bins = (plot_bin_starts / bin_size).astype(int)
+
+    snvs = snvs[['chrom', 'coord', 'ref', 'alt', 'plot_bin']].drop_duplicates()
+
+    count_table = snvs.groupby(['plot_bin']).size()
+    count_table = count_table.reindex(plot_bins).fillna(0)
+
+    ax.bar(plot_bin_starts, count_table.values, width=bin_size)
+
+    if full_genome:
+        ax.set_xlim((-0.5, refgenome.info.chromosome_end.max()))
+    else:
+        ax.set_xlim((min_x, max_x))
+    ax.set_xlabel('chrom')
+    ax.set_xticks([0] + list(refgenome.info.chromosome_end.values))
+    ax.set_xticklabels([])
+    ax.set_ylabel('count')
+    ax.xaxis.set_minor_locator(matplotlib.ticker.FixedLocator(refgenome.info.chromosome_mid))
+    ax.xaxis.set_minor_formatter(matplotlib.ticker.FixedFormatter(refgenome.info.chromosomes))
+    ax.xaxis.grid(False, which="minor")
