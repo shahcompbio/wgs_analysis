@@ -32,10 +32,11 @@ def get_color_set(labels):
 
 def create_chromosome_color_map():
 
-    color_set = plt.get_cmap('Set1')
-    color_set = [color_set(float(i) / len(refgenome.info.chromosomes)) for i in range(len(refgenome.info.chromosomes))]
+    colors = sb.color_palette("muted")
+    color_set = [colors[i % 2] for i in range(len(refgenome.info.chromosomes))]
     chromosome_color = collections.OrderedDict(zip(refgenome.info.chromosomes, color_set))
     return chromosome_color
+
 
 def get_single_cell_color_set():
     snv_palette = brewer2mpl.get_map('YlGnBu', 'Sequential', 3).mpl_colors

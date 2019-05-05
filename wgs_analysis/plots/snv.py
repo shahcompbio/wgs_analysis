@@ -69,13 +69,14 @@ def snv_adjacent_distance_plot(ax, snvs):
         edgecolors=list(snvs['chromosome_color']),
         alpha=0.5, s=5, lw=0)
 
-    # TODO: Change this based on remixt
+    ax.set_xlabel('chromosome')
     ax.set_xlim(min(snvs['plot_coord']), max(snvs['plot_coord']))
-    ax.set_xticks(refgenome.info.chromosome_mid, minor=False)
-    ax.set_xticklabels(refgenome.info.chromosomes, minor=False)
-    ax.set_xticks(refgenome.info.chromosome_end, minor=True)
-    ax.set_xticklabels([], minor=True)
-    ax.grid(False, which='major')
+    ax.set_xticks([0] + list(wgs_analysis.refgenome.info.chromosome_end.values))
+    ax.set_xticklabels([])
+    ax.xaxis.tick_bottom()
+    ax.yaxis.tick_left()
+    ax.xaxis.set_minor_locator(matplotlib.ticker.FixedLocator(wgs_analysis.refgenome.info.chromosome_mid))
+    ax.xaxis.set_minor_formatter(matplotlib.ticker.FixedFormatter(wgs_analysis.refgenome.info.chromosomes))
 
     ax.set_ylim(-0.0001, 1.1 * snvs['adjacent_distance_log'].max())
     ax.set_ylabel('Distance between mutations (log10)')
