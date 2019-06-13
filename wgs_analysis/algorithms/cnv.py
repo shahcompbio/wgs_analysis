@@ -51,3 +51,51 @@ def cluster_copies(copies):
     return copies
 
 
+def bins_to_segments(bins, sample_col, state_col, agg_values=None):
+    """ Merge adjacent bins with the same state to produce a segment table.
+    
+    Args:
+        bins (pandas.DataFrame): Binned copy number data
+        sample_col (str): Sample column in bins
+        state_col (str): State column to use to detect equality for merging adjacent bins
+        agg_values (dict, optional): Additional values to aggregate and their agg. Defaults to None.
+    
+    Returns:
+        pandas.DataFrame: Segments table of copy number data.
+    """
+
+    segments = []
+
+    for sample, data in bins.groupby(sample_col):
+        data = data.sort_values(['chr', 'start'])
+
+        data['next_start'] = data['end'] + 1
+        data['bins_adj'] = np.concatenate(
+            [[None], data['start'].values[1:] == data['next_start'].values[:-1]])
+        data['chr_adj'] = np.concatenate(
+            [[None], data['chr'].values[1:] == data['chr'].values[:-1]])
+        data['state_equal'] = np.concatenate(
+            [[None], data[state_col].values[1:] == data[state_col].values[:-1]])
+        data['adj_equal'] = (data['bins_adj'] & data['chr_adj'] & data['state_equal'])
+        data['segment_idx'] = (~data['adj_equal']).cumsum()
+
+        agg_cols = {
+            'chr': 'first',
+            'start': 'min',
+            'end': 'max',
+            state_col: 'first'}
+
+        if agg_values is not None:
+            agg_cols.update(agg_values)
+
+        data = data.groupby('segment_idx').agg(agg_cols)
+        data = data.reset_index(drop=True)
+        data[sample_col] = sample
+
+        segments.append(data)
+
+    segments = pd.concat(segments)
+
+    segments['chr'] = segments['chr'].astype(bins['chr'].dtype)
+
+    return segments
