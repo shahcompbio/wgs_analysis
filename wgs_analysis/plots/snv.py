@@ -41,7 +41,7 @@ def snv_adjacent_density_plot(ax, snvs):
     ax.set_xticklabels([], minor=True)
     ax.grid(False, which='major')
 
-    ax.set_ylim(-0.0001, 1.1 * snvs['adjacent_density'].max())
+    ax.set_ylim(-0.0001, 1.1 * snvs['adjacent_density'].fillna(0.).max())
     ax.set_ylabel('snv density')
 
 
@@ -78,7 +78,7 @@ def snv_adjacent_distance_plot(ax, snvs):
     ax.xaxis.set_minor_locator(matplotlib.ticker.FixedLocator(wgs_analysis.refgenome.info.chromosome_mid))
     ax.xaxis.set_minor_formatter(matplotlib.ticker.FixedFormatter(wgs_analysis.refgenome.info.chromosomes))
 
-    ax.set_ylim(-0.0001, 1.1 * snvs['adjacent_distance_log'].max())
+    ax.set_ylim(-0.0001, 1.1 * snvs['adjacent_distance_log'].fillna(0.).max())
     ax.set_ylabel('Distance between mutations (log10)')
 
     seaborn.despine(trim=True)

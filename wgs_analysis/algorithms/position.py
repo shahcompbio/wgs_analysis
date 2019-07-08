@@ -49,12 +49,13 @@ def calculate_adjacent_distance(positions):
     """
     dist_adj = np.absolute(positions[:-1] - positions[1:])
 
-    dist_left = np.zeros(positions.shape) * np.inf
+    dist_left = np.ones(positions.shape) * np.inf
     dist_left[1:] = dist_adj
 
-    dist_right = np.zeros(positions.shape) * np.inf
+    dist_right = np.ones(positions.shape) * np.inf
     dist_right[:-1] = dist_adj
 
     dist = np.minimum(dist_left, dist_right)
+    dist[dist == np.inf] = np.nan
 
     return dist
