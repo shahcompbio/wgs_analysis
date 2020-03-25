@@ -21,6 +21,9 @@ def fit_sample_signatures(snvs_table, sig_prob, subset_col):
     tri_nuc_table = (snvs_table.groupby([subset_col, 'tri_nuc_idx'])
         .size().unstack().fillna(0).astype(int))
 
+    if len(tri_nuc_table.index) == 0:
+        return pd.DataFrame()
+
     model = lda.LDA(n_topics=len(sig_prob.columns), random_state=0, n_iter=10000, alpha=0.01)
     model.components_ = sig_prob.values.T
 
@@ -35,6 +38,8 @@ def fit_sample_signatures(snvs_table, sig_prob, subset_col):
 
 
 def plot_signature_heatmap(sample_sig):
+    if sample_sig.shape[0] <= 1:
+        return plt.figure(figsize=(8,5))
     g = seaborn.clustermap(sample_sig, figsize=(8,5))
     g.ax_heatmap.set_yticklabels(g.ax_heatmap.get_yticklabels(), rotation=0)
     return g.fig
