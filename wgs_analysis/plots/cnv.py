@@ -592,12 +592,12 @@ def uniform_segment_copies(cnv, sample_column, data_columns, segment_length=1000
         cnv_reseg['weight_reseg'] = (
             cnv_reseg['length_reseg'].astype(float) /
             cnv_reseg['length_total_reseg'].astype(float))
-        cnv_reseg[column] *= cnv_reseg['weight_reseg']	
+        cnv_reseg[column] *= cnv_reseg['weight_reseg']
 
-        # Mask segments with null values from summation	
-        cnv_reseg[column] = cnv_reseg[column].fillna(0.0)	
+        # Mask segments with null values from summation
+        cnv_reseg[column] = cnv_reseg[column].fillna(0.0)
 
-    cnv_reseg = cnv_reseg.groupby(level=[0, 1, 2])[data_columns].sum()	
+    cnv_reseg = cnv_reseg.groupby(level=[0, 1, 2])[data_columns].sum()
 
     cnv_reseg.reset_index(inplace=True)
 
