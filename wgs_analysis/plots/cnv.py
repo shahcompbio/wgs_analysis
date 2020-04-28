@@ -82,47 +82,36 @@ def plot_segments(ax, cnv, value_col, color, fill=False):
         ax.add_collection(matplotlib.collections.PolyCollection(quads, facecolors=quad_color, edgecolors=quad_color, lw=0))
 
 
-def plot_cnv_segments(ax, cnv, major_col='major_raw', minor_col='minor_raw', fill=False):
-    """ Plot raw major/minor copy number as line plots
+def plot_cnv_segments(ax, cnv, column, segment_color, fill=False):
+    """ Plot raw copy number as line plots
 
     Args:
         ax (matplotlib.axes.Axes): plot axes
         cnv (pandas.DataFrame): cnv table
-        major_col (str): name of major copies column
-        minor_col (str): name of minor copies column
+        column (str): name of copies column
 
-    Plot major and minor copy number as line plots.  The columns 'start' and 'end'
+    Plot copy number as line plots.  The columns 'start' and 'end'
     are expected and should be adjusted for full genome plots.  Values from the
-    'major_col' and 'minor_col' columns are plotted.
+    'column' columns are plotted.
 
     """ 
 
-    segment_color_major = plt.get_cmap('RdBu')(0.1)
-    segment_color_minor = plt.get_cmap('RdBu')(0.9)
-
-    quad_color_major = colorConverter.to_rgba(segment_color_major, alpha=0.5)
-    quad_color_minor = colorConverter.to_rgba(segment_color_minor, alpha=0.5)
+    quad_color = colorConverter.to_rgba(segment_color, alpha=0.5)
 
     cnv = cnv.sort_values('start')
 
-    major_segments = create_segments(cnv, major_col)
-    minor_segments = create_segments(cnv, minor_col)
-    ax.add_collection(matplotlib.collections.LineCollection(major_segments, colors=segment_color_major, lw=1))
-    ax.add_collection(matplotlib.collections.LineCollection(minor_segments, colors=segment_color_minor, lw=1))
+    segments = create_segments(cnv, column)
+    ax.add_collection(matplotlib.collections.LineCollection(segments, colors=segment_color, lw=1))
 
-    major_connectors = create_connectors(cnv, major_col)
-    minor_connectors = create_connectors(cnv, minor_col)
-    ax.add_collection(matplotlib.collections.LineCollection(major_connectors, colors=segment_color_major, lw=1))
-    ax.add_collection(matplotlib.collections.LineCollection(minor_connectors, colors=segment_color_minor, lw=1))
+    connectors = create_connectors(cnv, column)
+    ax.add_collection(matplotlib.collections.LineCollection(connectors, colors=segment_color, lw=1))
 
     if fill:
-        major_quads = create_quads(cnv, major_col)
-        minor_quads = create_quads(cnv, minor_col)
-        ax.add_collection(matplotlib.collections.PolyCollection(major_quads, facecolors=quad_color_major, edgecolors=quad_color_major, lw=0))
-        ax.add_collection(matplotlib.collections.PolyCollection(minor_quads, facecolors=quad_color_minor, edgecolors=quad_color_minor, lw=0))
+        quads = create_quads(cnv, column)
+        ax.add_collection(matplotlib.collections.PolyCollection(quads, facecolors=quad_color, edgecolors=quad_color, lw=0))
 
 
-def plot_cnv_genome(ax, cnv, maxcopies=4, minlength=1000, major_col='major_raw', minor_col='minor_raw'):
+def plot_cnv_genome(ax, cnv, maxcopies=4, minlength=1000, major_col='major_raw', minor_col='minor_raw', scatter=False):
     """
     Plot major/minor copy number across the genome
 
@@ -131,8 +120,14 @@ def plot_cnv_genome(ax, cnv, maxcopies=4, minlength=1000, major_col='major_raw',
         cnv (pandas.DataFrame): `cnv_site` table
         maxcopies (int): maximum number of copies for setting y limits
         minlength (int): minimum length of segments to be drawn
+        major_col (str): name of column to use as major copy number
+        minor_col (str): name of column to use as minor copy number
+        scatter (boolean): display segments as scatter points not segments
 
     """
+
+    segment_color_major = plt.get_cmap('RdBu')(0.1)
+    segment_color_minor = plt.get_cmap('RdBu')(0.9)
 
     cnv = cnv.copy()
 
@@ -152,22 +147,42 @@ def plot_cnv_genome(ax, cnv, maxcopies=4, minlength=1000, major_col='major_raw',
     cnv['start'] = cnv['start'] + cnv['chromosome_start']
     cnv['end'] = cnv['end'] + cnv['chromosome_start']
 
-    plot_cnv_segments(ax, cnv, major_col=major_col, minor_col=minor_col)
+    if scatter:
+        size = cnv['length']/1e5
+        size = size.clip(lower=2)
 
-    ax.spines['left'].set_position(('outward', 10))
-    ax.spines['bottom'].set_position(('outward', 10))
+        cnv['mid'] = 0.5 * (cnv['start'] + cnv['end'])
+
+        for column, color in ((minor_col, segment_color_minor), (major_col, segment_color_major)):
+            clipped_cnv = cnv[cnv[column] < maxcopies]
+            amp_cnv = cnv[cnv[column] >= maxcopies]
+            ax.scatter(clipped_cnv['mid'], clipped_cnv[column], color=color, s=2, alpha=1)
+            ax.scatter(clipped_cnv['mid'], clipped_cnv[column], color=color, s=10, alpha=0.1)
+            ax.scatter(amp_cnv['mid'], np.ones(amp_cnv.shape[0]) * maxcopies, color=color, s=30)
+
+    else:
+        plot_cnv_segments(ax, cnv, column=major_col, segment_color=segment_color_major)
+        plot_cnv_segments(ax, cnv, column=minor_col, segment_color=segment_color_minor)
+
+    ax.spines['left'].set_position(('outward', 5))
+    ax.spines['bottom'].set_position(('outward', 5))
     ax.spines['top'].set_visible(False)
     ax.spines['right'].set_visible(False)
-    
-    ax.set_ylim((-0.05*maxcopies, maxcopies+.6))
+    ax.spines['left'].set_bounds(0, maxcopies)
+
+    ax.set_ylim((-0.05*maxcopies, maxcopies))
     ax.set_xlim((-0.5, wgs_analysis.refgenome.info.chromosome_end.max()))
     ax.set_xlabel('chromosome')
     ax.set_xticks([0] + list(wgs_analysis.refgenome.info.chromosome_end.values))
     ax.set_xticklabels([])
+    ax.set_yticks(range(0, int(maxcopies) + 1))
     ax.xaxis.tick_bottom()
     ax.yaxis.tick_left()
     ax.xaxis.set_minor_locator(matplotlib.ticker.FixedLocator(wgs_analysis.refgenome.info.chromosome_mid))
     ax.xaxis.set_minor_formatter(matplotlib.ticker.FixedFormatter(wgs_analysis.refgenome.info.chromosomes))
+
+    ax.xaxis.grid(True, which='major', linestyle=':')
+    ax.yaxis.grid(True, which='major', linestyle=':')
 
 
 def plot_cnv_chromosome(ax, cnv, sample_id, chromosome, start=None, end=None, maxcopies=4, minlength=1000, fontsize=None):
@@ -185,6 +200,13 @@ def plot_cnv_chromosome(ax, cnv, sample_id, chromosome, start=None, end=None, ma
         minlength(int): minimum length of segments to be drawn
 
     """
+
+    cnv = cnv[cnv['sample_id'] == sample_id]
+    
+    cnv = cnv.loc[(cnv['chromosome'] == chromosome)]
+    cnv = cnv.loc[(cnv['length'] >= minlength)]
+
+    cnv['genomic_length'] = cnv['end'] - cnv['start']
 
     cnv = cnv[cnv['sample_id'] == sample_id]
     
@@ -573,13 +595,6 @@ def uniform_segment_copies(cnv, sample_column, data_columns, segment_length=1000
         cnv_reseg['weight_reseg'] = (
             cnv_reseg['length_reseg'].astype(float) /
             cnv_reseg['length_total_reseg'].astype(float))
-        cnv_reseg[column] *= cnv_reseg['weight_reseg']
-
-        # Mask segments with null values from summation
-        cnv_reseg[column] = cnv_reseg[column].fillna(0.0)
-    
-    cnv_reseg = cnv_reseg.groupby(level=[0, 1, 2])[data_columns].sum()
-
     cnv_reseg.reset_index(inplace=True)
 
     # Ensure the segments are consistent regardless of the cnv data
