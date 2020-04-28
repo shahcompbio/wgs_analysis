@@ -204,13 +204,6 @@ def plot_cnv_chromosome(ax, cnv, sample_id, chromosome, start=None, end=None, ma
     cnv = cnv.loc[(cnv['length'] >= minlength)]
 
     cnv['genomic_length'] = cnv['end'] - cnv['start']
-
-    cnv = cnv[cnv['sample_id'] == sample_id]
-    
-    cnv = cnv.loc[(cnv['chromosome'] == chromosome)]
-    cnv = cnv.loc[(cnv['length'] >= minlength)]
-
-    cnv['genomic_length'] = cnv['end'] - cnv['start']
     cnv['length_fraction'] = cnv['length'].astype(float) / cnv['genomic_length'].astype(float)
     cnv = cnv.loc[(cnv['length_fraction'] >= 0.5)]
     
