@@ -149,11 +149,7 @@ def plot_cnv_genome(ax, cnv, maxcopies=4, minlength=1000, major_col='major_raw',
     cnv['end'] = cnv['end'] + cnv['chromosome_start']
 
     if scatter:
-        size = cnv['length']/1e5
-        size = size.clip(lower=2)
-
         cnv['mid'] = 0.5 * (cnv['start'] + cnv['end'])
-
         for column, color in ((minor_col, segment_color_minor), (major_col, segment_color_major)):
             clipped_cnv = cnv[cnv[column] < maxcopies]
             amp_cnv = cnv[cnv[column] >= maxcopies]
