@@ -89,6 +89,7 @@ def plot_cnv_segments(ax, cnv, column, segment_color, fill=False):
         ax (matplotlib.axes.Axes): plot axes
         cnv (pandas.DataFrame): cnv table
         column (str): name of copies column
+        segment_color: color of the segments
 
     Plot copy number as line plots.  The columns 'start' and 'end'
     are expected and should be adjusted for full genome plots.  Values from the
