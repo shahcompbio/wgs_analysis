@@ -209,15 +209,17 @@ def plot_cnv_chromosome(ax, cnv, chromosome, start=None, end=None, maxcopies=4, 
     cnv = cnv.loc[(cnv['chromosome'] == chromosome)]
     cnv = cnv.loc[(cnv['length'] >= minlength)]
 
+    if start is None:
+        start = 0
+    if end is None:
+        end = cnv['end'].max()
+
     cnv['genomic_length'] = cnv['end'] - cnv['start']
     cnv['length_fraction'] = cnv['length'].astype(float) / cnv['genomic_length'].astype(float)
     cnv = cnv.loc[(cnv['length_fraction'] >= 0.5)]
-    
-    if start is not None:
-        cnv = cnv.loc[(cnv['end'] > start)]
-    
-    if end is not None:
-        cnv = cnv.loc[(cnv['start'] < end)]
+
+    cnv = cnv.loc[(cnv['end'] > start)]
+    cnv = cnv.loc[(cnv['start'] < end)]
     
     if scatter:
         cnv['mid'] = 0.5 * (cnv['start'] + cnv['end'])
@@ -231,11 +233,11 @@ def plot_cnv_chromosome(ax, cnv, chromosome, start=None, end=None, maxcopies=4, 
     else:
         plot_cnv_segments(ax, cnv, column=major_col, segment_color=segment_color_major)
         plot_cnv_segments(ax, cnv, column=minor_col, segment_color=segment_color_minor)
-        ax.set_xlim((0, cnv['end'].max()))
 
     if maxcopies is None:
         maxcopies = int(np.ceil(cnv['major_raw'].max()))
 
+    ax.set_xlim((start, end))
     ax.set_ylim((-0.05*maxcopies, maxcopies+.6))
     
     x_ticks_mb = ['{0:.3g}M'.format(x/1000000.) for x in ax.get_xticks()]
