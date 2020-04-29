@@ -51,51 +51,51 @@ def cluster_copies(copies):
     return copies
 
 
-def bins_to_segments(bins, sample_col, state_col, agg_values=None):
-    """ Merge adjacent bins with the same state to produce a segment table.
-    
+def aggregate_adjacent(cnv, value_cols=(), stable_cols=(), length_normalized_cols=(), summed_cols=()):
+    """ Aggregate adjacent segments with similar copy number state.
+
+    see: https://github.com/amcpherson/remixt/blob/master/remixt/segalg.py
+
     Args:
-        bins (pandas.DataFrame): Binned copy number data
-        sample_col (str): Sample column in bins
-        state_col (str): State column to use to detect equality for merging adjacent bins
-        agg_values (dict, optional): Additional values to aggregate and their agg. Defaults to None.
-    
+        cnv (pandas.DataFrame): copy number table
+
+    KwArgs:
+        value_cols (list): list of columns to compare for equivalent copy number state
+        stable_cols (list): columns for which values are the same between equivalent states
+        length_normalized_cols (list): columns that are width normalized for equivalent states
+
     Returns:
-        pandas.DataFrame: Segments table of copy number data.
+        pandas.DataFrame: copy number with adjacent segments aggregated
     """
 
-    segments = []
+    # Group segments with same state
+    cnv = cnv.sort_values(['chromosome', 'start'])
+    cnv['chromosome_index'] = np.searchsorted(np.unique(cnv['chromosome']), cnv['chromosome'])
+    cnv['diff'] = cnv[['chromosome_index'] + value_cols].diff().abs().sum(axis=1)
+    cnv['is_diff'] = (cnv['diff'] != 0)
+    cnv['cn_group'] = cnv['is_diff'].cumsum()
 
-    for sample, data in bins.groupby(sample_col):
-        data = data.sort_values(['chr', 'start'])
+    def agg_segments(df):
+        a = df[stable_cols].iloc[0]
 
-        data['next_start'] = data['end'] + 1
-        data['bins_adj'] = np.concatenate(
-            [[None], data['start'].values[1:] == data['next_start'].values[:-1]])
-        data['chr_adj'] = np.concatenate(
-            [[None], data['chr'].values[1:] == data['chr'].values[:-1]])
-        data['state_equal'] = np.concatenate(
-            [[None], data[state_col].values[1:] == data[state_col].values[:-1]])
-        data['adj_equal'] = (data['bins_adj'] & data['chr_adj'] & data['state_equal'])
-        data['segment_idx'] = (~data['adj_equal']).cumsum()
+        a['chromosome'] = df['chromosome'].min()
+        a['start'] = df['start'].min()
+        a['end'] = df['end'].max()
+        a['length'] = df['length'].sum()
 
-        agg_cols = {
-            'chr': 'first',
-            'start': 'min',
-            'end': 'max',
-            state_col: 'first'}
+        for col in length_normalized_cols:
+            a[col] = (df[col] * df['length']).sum() / (df['length'].sum() + 1e-16)
 
-        if agg_values is not None:
-            agg_cols.update(agg_values)
+        for col in summed_cols:
+            a[col] = df[col].sum()
 
-        data = data.groupby('segment_idx').agg(agg_cols)
-        data = data.reset_index(drop=True)
-        data[sample_col] = sample
+        return a
 
-        segments.append(data)
+    aggregated = cnv.groupby('cn_group').apply(agg_segments)
 
-    segments = pd.concat(segments)
+    for col in aggregated:
+        aggregated[col] = aggregated[col].astype(cnv[col].dtype)
 
-    segments['chr'] = segments['chr'].astype(bins['chr'].dtype)
+    return aggregated
 
-    return segments
+
