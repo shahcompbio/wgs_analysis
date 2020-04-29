@@ -182,24 +182,30 @@ def plot_cnv_genome(ax, cnv, maxcopies=4, minlength=1000, major_col='major_raw',
     ax.yaxis.grid(True, which='major', linestyle=':')
 
 
-def plot_cnv_chromosome(ax, cnv, sample_id, chromosome, start=None, end=None, maxcopies=4, minlength=1000, fontsize=None):
+def plot_cnv_chromosome(ax, cnv, chromosome, start=None, end=None, maxcopies=4, minlength=1000, major_col='major_raw', minor_col='minor_raw', fontsize=None, scatter=False):
     """
     Plot major/minor copy number across a chromosome
 
     Args:
         ax (matplotlib.axes.Axes): plot axes
         cnv (pandas.DataFrame): `cnv_site` table
-        sample_id (str): site to plot
         chromosome (str): chromosome to plot
         start (int): start of range in chromosome to plot
         end (int): start of range in chromosome to plot
         maxcopies(float): maximum number of copies for setting y limits
         minlength(int): minimum length of segments to be drawn
+        major_col (str): name of column to use as major copy number
+        minor_col (str): name of column to use as minor copy number
+        fontsize (int): size of x tick labels
+        scatter (boolean): display segments as scatter points not segments
 
     """
 
-    cnv = cnv[cnv['sample_id'] == sample_id]
-    
+    segment_color_major = plt.get_cmap('RdBu')(0.1)
+    segment_color_minor = plt.get_cmap('RdBu')(0.9)
+
+    cnv = cnv.copy()
+
     cnv = cnv.loc[(cnv['chromosome'] == chromosome)]
     cnv = cnv.loc[(cnv['length'] >= minlength)]
 
@@ -213,28 +219,42 @@ def plot_cnv_chromosome(ax, cnv, sample_id, chromosome, start=None, end=None, ma
     if end is not None:
         cnv = cnv.loc[(cnv['start'] < end)]
     
-    plot_cnv_segments(ax, cnv)
-    
+    if scatter:
+        cnv['mid'] = 0.5 * (cnv['start'] + cnv['end'])
+        for column, color in ((minor_col, segment_color_minor), (major_col, segment_color_major)):
+            clipped_cnv = cnv[cnv[column] < maxcopies]
+            amp_cnv = cnv[cnv[column] >= maxcopies]
+            ax.scatter(clipped_cnv['mid'], clipped_cnv[column], color=color, s=2, alpha=1)
+            ax.scatter(clipped_cnv['mid'], clipped_cnv[column], color=color, s=10, alpha=0.1)
+            ax.scatter(amp_cnv['mid'], np.ones(amp_cnv.shape[0]) * maxcopies, color=color, s=30)
+
+    else:
+        plot_cnv_segments(ax, cnv, column=major_col, segment_color=segment_color_major)
+        plot_cnv_segments(ax, cnv, column=minor_col, segment_color=segment_color_minor)
+        ax.set_xlim((0, cnv['end'].max()))
+
     if maxcopies is None:
         maxcopies = int(np.ceil(cnv['major_raw'].max()))
 
-    ax.set_xlim((start, end))
     ax.set_ylim((-0.05*maxcopies, maxcopies+.6))
     
-    ax.set_ylabel(helpers.plot_ids[sample_id])
-
     x_ticks_mb = ['{0:.3g}M'.format(x/1000000.) for x in ax.get_xticks()]
     
     ax.set_xticklabels(x_ticks_mb, fontsize=fontsize)
     ax.set_xlabel('Chromosome {0}'.format(chromosome))
-    ax.set_yticks(xrange(0, int(maxcopies+1.), int(math.ceil(maxcopies/6.))))
+    ax.set_yticks(range(0, int(maxcopies) + 1))
     
+    ax.spines['left'].set_position(('outward', 5))
+    ax.spines['bottom'].set_position(('outward', 5))
     ax.spines['top'].set_visible(False)
     ax.spines['right'].set_visible(False)
     ax.get_xaxis().tick_bottom()
     ax.get_yaxis().tick_left()
 
-    plots.utils.trim_spines_to_ticks(ax)
+    wgs_analysis.plots.utils.trim_spines_to_ticks(ax)
+
+    ax.xaxis.grid(True, which='major', linestyle=':')
+    ax.yaxis.grid(True, which='major', linestyle=':')
 
 
 def plot_cnv(cnv, site_ids, chromosome, start=None, end=None, maxcopies=2):
