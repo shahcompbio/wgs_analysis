@@ -99,3 +99,54 @@ def aggregate_adjacent(cnv, value_cols=(), stable_cols=(), length_normalized_col
     return aggregated
 
 
+def calculate_gene_copy(cnv, genes, cols):
+    """ Calculate the copy number segments overlapping each gene
+
+    Args:
+        cnv (pandas.DataFrame): copy number table
+        genes (pandas.DataFrame): gene table
+        cols (list of str): copy number columns
+
+    Returns:
+        pandas.DataFrame: segment copy number for each gene
+
+    The input copy number table is assumed to have columns: 
+        'chromosome', 'start', 'end', 'width'
+    in addition to the columns from cols
+
+    The input genes table is assumed to have columns:
+        'chromosome', 'gene_start', 'gene_end', 'gene_name',
+        'gene_id'
+
+    The output segment copy number table should have columns:
+        'chromosome', 'gene_start', 'gene_end', 'gene_name',
+        'gene_id', 'overlap_start', 'overlap_end', 'overlap_width',
+    in addition to the columns from cols
+
+    """
+    data = []
+
+    for chromosome in cnv['chromosome'].unique():
+        chr_cnv = cnv[cnv['chromosome'] == chromosome]
+        chr_genes = genes[genes['chromosome'] == chromosome]
+        
+        # Iterate through segments, calculate overlapping genes
+        for idx, row in chr_cnv.iterrows():
+
+            # Subset overlapping genes
+            overlapping_genes = chr_genes[
+                ~((chr_genes['gene_end'] < row['start']) | (chr_genes['gene_start'] > row['end']))].copy()
+
+            overlapping_genes['overlap_start'] = overlapping_genes['gene_start'].clip(lower=row['start'])
+            overlapping_genes['overlap_end'] = overlapping_genes['gene_end'].clip(upper=row['end'])
+            overlapping_genes['overlap_width'] = overlapping_genes['overlap_end'] - overlapping_genes['overlap_start'] - 1
+
+            for col in cols:
+                overlapping_genes[col] = row[col]
+
+            data.append(overlapping_genes)
+
+    data = pd.concat(data, ignore_index=True)
+
+    return data
+
