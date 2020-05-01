@@ -8,6 +8,8 @@ import pandas as pd
 import matplotlib
 import matplotlib.pyplot as plt
 import seaborn
+import random
+import scipy
 
 import wgs_analysis.plots as plots
 import wgs_analysis.refgenome as refgenome
@@ -224,5 +226,80 @@ def breakpoint_circos_plot(ax, breakpoints):
     ax.set_ylim(0., 1.)
     ax.set_ylabel('')
 
+
+def plot_breakends(ax, breakends, chromosome=None, lw=0.5):
+    """ Plot breakpoint flags and arcs on a genome axis
+
+    Args:
+        ax: matplotlib axis
+        breakends: breakend table
+    
+    Kwargs:
+        lw: line width for arcs
+
+    The breakends table should have the following columns:
+        - prediction_id
+        - chromosome
+        - position
+        - strand
+
+    """
+    chromosome_info = refgenome.info.chromosome_info[['chr', 'chromosome_start']].copy()
+    chromosome_info['chromosome'] = chromosome_info['chr']
+
+    if chromosome is None:
+        plot_data = breakends.merge(chromosome_info)
+        plot_data = plot_data[plot_data['chr'].isin(refgenome.info.chromosomes)]
+        plot_data['plot_position'] = plot_data['position'] + plot_data['chromosome_start']
+
+    else:
+        plot_data = breakends.copy()
+        plot_data['plot_position'] = plot_data['position']
+
+    xlim = ax.get_xlim()
+    xrng = xlim[1] - xlim[0]
+
+    ylim = ax.get_ylim()
+    yrng = ylim[1] - ylim[0]
+
+    arrow_length = 0.01 * xrng
+
+    head_width = yrng / 30.
+    head_length = xrng / 100.
+
+    prediction_ids = list(plot_data['prediction_id'].unique())
+    random.shuffle(prediction_ids)
+    color_palette = seaborn.color_palette('hls', len(prediction_ids))
+    prediction_colors = dict(zip(prediction_ids, color_palette))
+
+    for idx in plot_data.index:
+        if chromosome is not None and plot_data.loc[idx, 'chromosome'] != chromosome:
+            continue
+        prediction_id = plot_data.loc[idx, 'prediction_id']
+        x = plot_data.loc[idx, 'plot_position']
+        strand = plot_data.loc[idx, 'strand']
+        y = np.random.uniform(ylim[0] + 0.75*yrng, ylim[0] + 0.95*yrng)
+        offset = (arrow_length, -arrow_length)[strand == '+']
+        color = prediction_colors[prediction_id]
+        ax.arrow(x, y, offset, 0, color=color, lw=lw, alpha=1.0, head_width=head_width, head_length=head_length)
+        ax.plot([x, x], [ylim[0], ylim[1]], color=color, lw=lw, ls='-', alpha=1.0)
+
+    for prediction_id, pred_breakends in plot_data.groupby('prediction_id'):
+        if len(pred_breakends.index) != 2:
+            continue
+        if chromosome is not None and set(pred_breakends['chromosome'].values) != set([chromosome]):
+            continue
+        pos1 = pred_breakends['plot_position'].min()
+        pos2 = pred_breakends['plot_position'].max()
+        posmid = (pos1 + pos2) / 2.
+        height = 0.5 * yrng * (pos2 - pos1) / xrng
+        ypos = ylim[1]
+        yposmid = ypos + height
+        spl = scipy.interpolate.make_interp_spline([pos1, posmid, pos2], [ypos, yposmid, ypos], k=2)
+        pos = np.linspace(pos1, pos2, 100)
+        color = prediction_colors[prediction_id]
+        ax.plot(pos, spl(pos), ls='-', lw=lw, color=color)
+
+    ax.set_ylim((ylim[0], ylim[1] + 5))
 
 
