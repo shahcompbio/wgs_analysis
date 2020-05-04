@@ -112,7 +112,7 @@ def plot_cnv_segments(ax, cnv, column, segment_color, fill=False):
         ax.add_collection(matplotlib.collections.PolyCollection(quads, facecolors=quad_color, edgecolors=quad_color, lw=0))
 
 
-def plot_cnv_genome(ax, cnv, maxcopies=4, minlength=1000, major_col='major_raw', minor_col='minor_raw', scatter=False):
+def plot_cnv_genome(ax, cnv, maxcopies=4, minlength=1000, major_col='major_raw', minor_col='minor_raw', scatter=False, squashy=False):
     """
     Plot major/minor copy number across the genome
 
@@ -124,6 +124,7 @@ def plot_cnv_genome(ax, cnv, maxcopies=4, minlength=1000, major_col='major_raw',
         major_col (str): name of column to use as major copy number
         minor_col (str): name of column to use as minor copy number
         scatter (boolean): display segments as scatter points not segments
+        squashy (boolean): squash the y axis to display all copy numbers
 
     """
 
@@ -131,6 +132,12 @@ def plot_cnv_genome(ax, cnv, maxcopies=4, minlength=1000, major_col='major_raw',
     segment_color_minor = plt.get_cmap('RdBu')(0.9)
 
     cnv = cnv.copy()
+
+    squash_coeff = 0.15
+    squash_f = lambda a: np.tanh(squash_coeff * a)
+    if squashy:
+        cnv[major_col] = squash_f(cnv[major_col])
+        cnv[minor_col] = squash_f(cnv[minor_col])
 
     if 'length' not in cnv:
         cnv['length'] = cnv['end'] - cnv['start']
@@ -165,14 +172,25 @@ def plot_cnv_genome(ax, cnv, maxcopies=4, minlength=1000, major_col='major_raw',
     ax.spines['bottom'].set_position(('outward', 5))
     ax.spines['top'].set_visible(False)
     ax.spines['right'].set_visible(False)
-    ax.spines['left'].set_bounds(0, maxcopies)
 
-    ax.set_ylim((-0.05*maxcopies, maxcopies))
     ax.set_xlim((-0.5, wgs_analysis.refgenome.info.chromosome_end.max()))
     ax.set_xlabel('chromosome')
     ax.set_xticks([0] + list(wgs_analysis.refgenome.info.chromosome_end.values))
     ax.set_xticklabels([])
-    ax.set_yticks(range(0, int(maxcopies) + 1))
+
+    if squashy:
+        yticks = np.array([0, 1, 2, 3, 4, 5, 6, 7, 8, 10, 20])
+        yticks_squashed = squash_f(yticks)
+        ytick_labels = [str(a) for a in yticks]
+        ax.set_yticks(yticks_squashed)
+        ax.set_yticklabels(ytick_labels)
+        ax.set_ylim((-0.01, 1.01))
+        ax.spines['left'].set_bounds(0, 1)
+    else:
+        ax.set_ylim((-0.05*maxcopies, maxcopies))
+        ax.set_yticks(range(0, int(maxcopies) + 1))
+        ax.spines['left'].set_bounds(0, maxcopies)
+
     ax.xaxis.tick_bottom()
     ax.yaxis.tick_left()
     ax.xaxis.set_minor_locator(matplotlib.ticker.FixedLocator(wgs_analysis.refgenome.info.chromosome_mid))
