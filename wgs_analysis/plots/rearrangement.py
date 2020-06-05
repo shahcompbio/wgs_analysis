@@ -300,6 +300,6 @@ def plot_breakends(ax, breakends, chromosome=None, lw=0.5):
         color = prediction_colors[prediction_id]
         ax.plot(pos, spl(pos), ls='-', lw=lw, color=color)
 
-    ax.set_ylim((ylim[0], ylim[1] + 5))
+    ax.set_ylim((ylim[0], ylim[1] + 0.5 * (ylim[1] - ylim[0])))
 
 
