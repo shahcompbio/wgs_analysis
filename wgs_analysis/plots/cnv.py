@@ -200,7 +200,7 @@ def plot_cnv_genome(ax, cnv, maxcopies=4, minlength=1000, major_col='major_raw',
     ax.yaxis.grid(True, which='major', linestyle=':')
 
 
-def plot_cnv_chromosome(ax, cnv, chromosome, start=None, end=None, maxcopies=4, minlength=1000, major_col='major_raw', minor_col='minor_raw', fontsize=None, scatter=False):
+def plot_cnv_chromosome(ax, cnv, chromosome, start=None, end=None, maxcopies=4, minlength=1000, major_col='major_raw', minor_col='minor_raw', fontsize=None, scatter=False, squashy=False):
     """
     Plot major/minor copy number across a chromosome
 
@@ -216,6 +216,7 @@ def plot_cnv_chromosome(ax, cnv, chromosome, start=None, end=None, maxcopies=4, 
         minor_col (str): name of column to use as minor copy number
         fontsize (int): size of x tick labels
         scatter (boolean): display segments as scatter points not segments
+        squashy (boolean): squash the y axis to display all copy numbers
 
     """
 
@@ -223,6 +224,12 @@ def plot_cnv_chromosome(ax, cnv, chromosome, start=None, end=None, maxcopies=4, 
     segment_color_minor = plt.get_cmap('RdBu')(0.9)
 
     cnv = cnv.copy()
+
+    squash_coeff = 0.15
+    squash_f = lambda a: np.tanh(squash_coeff * a)
+    if squashy:
+        cnv[major_col] = squash_f(cnv[major_col])
+        cnv[minor_col] = squash_f(cnv[minor_col])
 
     cnv = cnv.loc[(cnv['chromosome'] == chromosome)]
     cnv = cnv.loc[(cnv['length'] >= minlength)]
@@ -252,22 +259,29 @@ def plot_cnv_chromosome(ax, cnv, chromosome, start=None, end=None, maxcopies=4, 
         plot_cnv_segments(ax, cnv, column=major_col, segment_color=segment_color_major)
         plot_cnv_segments(ax, cnv, column=minor_col, segment_color=segment_color_minor)
 
-    if maxcopies is None:
-        maxcopies = int(np.ceil(cnv['major_raw'].max()))
-
-    ax.set_xlim((start, end))
-    ax.set_ylim((-0.05*maxcopies, maxcopies+.6))
-    
-    x_ticks_mb = ['{0:.3g}M'.format(x/1000000.) for x in ax.get_xticks()]
-    
-    ax.set_xticklabels(x_ticks_mb, fontsize=fontsize)
-    ax.set_xlabel('Chromosome {0}'.format(chromosome))
-    ax.set_yticks(range(0, int(maxcopies) + 1))
-    
     ax.spines['left'].set_position(('outward', 5))
     ax.spines['bottom'].set_position(('outward', 5))
     ax.spines['top'].set_visible(False)
     ax.spines['right'].set_visible(False)
+
+    ax.set_xlim((start, end))
+    ax.set_xlabel('Chromosome {0}'.format(chromosome))
+    x_ticks_mb = ['{0:.3g}M'.format(x/1000000.) for x in ax.get_xticks()]
+    ax.set_xticklabels(x_ticks_mb, fontsize=fontsize)
+
+    if squashy:
+        yticks = np.array([0, 1, 2, 3, 4, 5, 6, 7, 8, 10, 20])
+        yticks_squashed = squash_f(yticks)
+        ytick_labels = [str(a) for a in yticks]
+        ax.set_yticks(yticks_squashed)
+        ax.set_yticklabels(ytick_labels)
+        ax.set_ylim((-0.01, 1.01))
+        ax.spines['left'].set_bounds(0, 1)
+    else:
+        ax.set_ylim((-0.05*maxcopies, maxcopies))
+        ax.set_yticks(range(0, int(maxcopies) + 1))
+        ax.spines['left'].set_bounds(0, maxcopies)
+  
     ax.get_xaxis().tick_bottom()
     ax.get_yaxis().tick_left()
 
