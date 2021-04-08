@@ -200,7 +200,7 @@ def plot_cnv_genome(ax, cnv, maxcopies=4, minlength=1000, major_col='major_raw',
     ax.yaxis.grid(True, which='major', linestyle=':')
 
 
-def plot_cnv_chromosome(ax, cnv, chromosome, start=None, end=None, maxcopies=4, minlength=1000, major_col='major_raw', minor_col='minor_raw', fontsize=None, scatter=False, squashy=False):
+def plot_cnv_chromosome(ax, cnv, chromosome, start=None, end=None, maxcopies=4, minlength=1000, major_col='major_raw', minor_col='minor_raw', fontsize=None, scatter=False, squashy=False, grid=True, yticks=None):
     """
     Plot major/minor copy number across a chromosome
 
@@ -220,6 +220,8 @@ def plot_cnv_chromosome(ax, cnv, chromosome, start=None, end=None, maxcopies=4, 
 
     """
 
+    chromosome_length = wgs_analysis.refgenome.info.chromosome_info.set_index('chr').loc[chromosome, 'chromosome_length']
+
     segment_color_major = plt.get_cmap('RdBu')(0.1)
     segment_color_minor = plt.get_cmap('RdBu')(0.9)
 
@@ -237,7 +239,7 @@ def plot_cnv_chromosome(ax, cnv, chromosome, start=None, end=None, maxcopies=4, 
     if start is None:
         start = 0
     if end is None:
-        end = cnv['end'].max()
+        end = chromosome_length
 
     cnv['genomic_length'] = cnv['end'] - cnv['start']
     cnv['length_fraction'] = cnv['length'].astype(float) / cnv['genomic_length'].astype(float)
@@ -264,22 +266,30 @@ def plot_cnv_chromosome(ax, cnv, chromosome, start=None, end=None, maxcopies=4, 
     ax.spines['top'].set_visible(False)
     ax.spines['right'].set_visible(False)
 
+    xticks = np.arange(0, chromosome_length, 2e7)
+    xticklabels = ['{0:d}M'.format(int(x / 1e6)) for x in xticks]
+    xminorticks = np.arange(0, chromosome_length, 1e6)
+    ax.set_xlabel(f'chromosome {chromosome}')
+    ax.set_xticks(xticks)
+    ax.set_xticklabels(xticklabels)
+    ax.xaxis.set_minor_locator(matplotlib.ticker.FixedLocator(xminorticks))
+    ax.xaxis.set_minor_formatter(matplotlib.ticker.NullFormatter())
     ax.set_xlim((start, end))
-    ax.set_xlabel('Chromosome {0}'.format(chromosome))
-    x_ticks_mb = ['{0:.3g}M'.format(x/1000000.) for x in ax.get_xticks()]
-    ax.set_xticklabels(x_ticks_mb, fontsize=fontsize)
 
     if squashy:
-        yticks = np.array([0, 1, 2, 3, 4, 5, 6, 7, 8, 10, 20])
-        yticks_squashed = squash_f(yticks)
+        if yticks is None:
+            yticks = np.array([0, 1, 2, 3, 4, 5, 6, 7, 8, 10, 20])
+        yticks_squashed = squash_f(np.array(yticks))
         ytick_labels = [str(a) for a in yticks]
         ax.set_yticks(yticks_squashed)
         ax.set_yticklabels(ytick_labels)
         ax.set_ylim((-0.01, 1.01))
         ax.spines['left'].set_bounds(0, 1)
     else:
+        if yticks is None:
+            yticks = range(0, int(maxcopies) + 1, 2)
         ax.set_ylim((-0.05*maxcopies, maxcopies))
-        ax.set_yticks(range(0, int(maxcopies) + 1))
+        ax.set_yticks(yticks)
         ax.spines['left'].set_bounds(0, maxcopies)
   
     ax.get_xaxis().tick_bottom()
@@ -287,8 +297,9 @@ def plot_cnv_chromosome(ax, cnv, chromosome, start=None, end=None, maxcopies=4, 
 
     wgs_analysis.plots.utils.trim_spines_to_ticks(ax)
 
-    ax.xaxis.grid(True, which='major', linestyle=':')
-    ax.yaxis.grid(True, which='major', linestyle=':')
+    if grid:
+        ax.xaxis.grid(True, which='major', linestyle=':')
+        ax.yaxis.grid(True, which='major', linestyle=':')
 
 
 def plot_cnv(cnv, site_ids, chromosome, start=None, end=None, maxcopies=2):
