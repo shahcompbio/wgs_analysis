@@ -1,4 +1,5 @@
 import seaborn as sb
+import numpy as np
 
 
 def setup_plot():
@@ -72,9 +73,9 @@ def trim_spines_to_ticks(ax):
     """
     Trim spines to start and end at first and last ticks.
     """
-    xticks = ax.get_xticks()
+    xticks = np.concatenate((ax.get_xticks(), ax.get_xticks(minor=True)))
     ax.spines['bottom'].set_bounds(min(xticks), max(xticks))
-    yticks = ax.get_yticks()
+    yticks = np.concatenate((ax.get_yticks(), ax.get_yticks(minor=True)))
     ax.spines['left'].set_bounds(min(yticks), max(yticks))
 
 
