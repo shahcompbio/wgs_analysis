@@ -98,6 +98,35 @@ def chromosome_type_plot_legend(ax, rearrangement_types=None):
               list(rearrangement_types), loc="upper right")
 
 
+def type_size_plot(data, type_col='type'):
+    data = data.copy()
+    data['type'] = data['type'].astype('category')
+    data['rearrangement_type'] = pd.Categorical(
+        data['rearrangement_type'],
+        categories=[
+            'duplication',
+            'inversion',
+            'balanced',
+            'foldback',
+            'deletion',
+            'unbalanced',
+        ])
+    data['type'] = pd.Categorical(
+        data['type'],
+        categories=[
+            'duplication',
+            'inversion',
+            'deletion',
+            'translocation',
+        ])
+
+    seaborn.factorplot(
+        x=type_col, hue='size_class', kind='count',
+        data=data, sharex=False,
+        aspect=3, height=2.5)
+    seaborn.despine(trim=True)
+
+
 def breakpoint_adjacent_density_plot(ax, breakends):
     breakends = breakends.drop_duplicates(['prediction_id', 'prediction_side'])
 

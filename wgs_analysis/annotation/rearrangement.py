@@ -195,3 +195,27 @@ def annotate_expression_correlation(breakpoints, expression):
 
     return breakpoints
 
+
+def annotate_size_class(data):
+    """ Add the categorical column size_class.
+
+    Expects columns:
+        - position_1
+        - position_2
+        - type
+    """
+
+    length = (data['position_1'] - data['position_2']).abs()
+    data['size_class'] = pd.cut(
+        length,
+        [0, 1e4, 1e6, 1e8, 1e10],
+        labels=['0-1K', '1K-1M', '1-100M', '>100M'])
+    data['size_class'] = data['size_class'].astype(str)
+    data.loc[data['type'] == 'translocation', 'size_class'] = 'Tr'
+    data['size_class'] = pd.Categorical(
+        data['size_class'],
+        categories=reversed(['0-1K', '1K-1M', '1-100M', '>100M', 'Tr']))
+
+    return data
+
+
