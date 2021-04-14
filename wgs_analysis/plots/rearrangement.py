@@ -20,18 +20,6 @@ default_rearrangement_types = ['foldback', 'deletion', 'duplication', 'inversion
 default_rearrangement_type_colors = seaborn.color_palette('Dark2', len(default_rearrangement_types))
 
 
-def create_breakends(breakpoints, data_cols=[]):
-    breakends = breakpoints[['prediction_id', 'chromosome_1', 'strand_1', 'position_1', 'chromosome_2', 'strand_2', 'position_2']].copy()
-    breakends.set_index('prediction_id', inplace=True)
-    breakends.columns = pd.MultiIndex.from_tuples([tuple(c.split('_')) for c in breakends.columns])
-    breakends = breakends.stack()
-    breakends.index.names = ('prediction_id', 'prediction_side')
-    breakends = breakends.reset_index()
-    breakends['prediction_side'] = np.where(breakends['prediction_side'] == '1', 0, 1)
-    breakends = breakends.merge(breakpoints[['prediction_id'] + data_cols], on='prediction_id')
-    return breakends
-
-
 def chromosome_type_plot(ax, breakends, bin_size=20000000, rearrangement_types=None, full_genome=True):
     if rearrangement_types is None:
         rearrangement_types = default_rearrangement_types

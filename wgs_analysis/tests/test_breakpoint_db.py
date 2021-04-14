@@ -33,17 +33,17 @@ def find_matches_brute(breakpoints_1, breakpoints_2, extend=500):
             match1 = (
                 (row1['chromosome_1'] == row2['chromosome_1']) &
                 (row1['strand_1'] == row2['strand_1']) &
-                (abs(row1['position_1'] - row2['position_1']) <= 500) &
+                (abs(row1['position_1'] - row2['position_1']) <= extend) &
                 (row1['chromosome_2'] == row2['chromosome_2']) &
                 (row1['strand_2'] == row2['strand_2']) &
-                (abs(row1['position_2'] - row2['position_2']) <= 500))
+                (abs(row1['position_2'] - row2['position_2']) <= extend))
             match2 = (
                 (row1['chromosome_1'] == row2['chromosome_2']) &
                 (row1['strand_1'] == row2['strand_2']) &
-                (abs(row1['position_1'] - row2['position_2']) <= 500) &
+                (abs(row1['position_1'] - row2['position_2']) <= extend) &
                 (row1['chromosome_2'] == row2['chromosome_1']) &
                 (row1['strand_2'] == row2['strand_1']) &
-                (abs(row1['position_2'] - row2['position_1']) <= 500))
+                (abs(row1['position_2'] - row2['position_1']) <= extend))
 
             if match1 or match2:
                 matches.append({
@@ -58,16 +58,18 @@ def find_matches_brute(breakpoints_1, breakpoints_2, extend=500):
 
 class BreakpointDatabaseTestCase(unittest.TestCase):
     def test_find_matching(self):
-        random_breakpoints = generate_random_breakpoints(1000, seed=1)
+        extend = 500
+
+        random_breakpoints = generate_random_breakpoints(1000, max_position=2000, seed=1)
 
         breakpoint_db = wgs_analysis.algorithms.rearrangement.BreakpointDatabase(random_breakpoints)
 
-        test_breakpoints = generate_random_breakpoints(1000, seed=2)
+        test_breakpoints = generate_random_breakpoints(1000, max_position=2000, seed=2)
 
         matches = []
 
         for i, (idx, row) in enumerate(test_breakpoints.iterrows()):
-            for match in breakpoint_db.query(row, extend=500):
+            for match in breakpoint_db.query(row, extend=extend):
                 matches.append({
                     'from_idx': match,
                     'to_idx': row['prediction_id'],
@@ -75,7 +77,7 @@ class BreakpointDatabaseTestCase(unittest.TestCase):
 
         matches = pd.DataFrame(matches)
 
-        test_matches = find_matches_brute(random_breakpoints, test_breakpoints)
+        test_matches = find_matches_brute(random_breakpoints, test_breakpoints, extend=extend)
 
         test_results = pd.merge(
             matches.assign(matches=1),

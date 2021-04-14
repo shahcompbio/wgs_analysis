@@ -1,51 +1,51 @@
 import bisect
 import collections
 import pandas as pd
+import numpy as np
+
+
+def create_breakends(breakpoints, data_cols=(), id_col='prediction_id'):
+    breakends = breakpoints[[id_col, 'chromosome_1', 'strand_1', 'position_1', 'chromosome_2', 'strand_2', 'position_2']].copy()
+    breakends.set_index(id_col, inplace=True)
+    breakends.columns = pd.MultiIndex.from_tuples([tuple(c.split('_')) for c in breakends.columns])
+    breakends = breakends.stack()
+    breakends.index.names = (id_col, 'prediction_side')
+    breakends = breakends.reset_index()
+    breakends['prediction_side'] = np.where(breakends['prediction_side'] == '1', 0, 1)
+    breakends = breakends.merge(breakpoints[[id_col] + list(data_cols)], on=id_col)
+    return breakends
 
 
 class BreakpointDatabase(object):
     def __init__(self, breakpoints, id_col='prediction_id'):
-        self.positions = collections.defaultdict(list)
-        self.break_ids = collections.defaultdict(set)
-
-        for idx, row in breakpoints.iterrows():
-            for side in ('1', '2'):
-                self.positions[(row['chromosome_' + side], row['strand_' + side])].append(row['position_' + side])
-                self.break_ids[(row['chromosome_' + side], row['strand_' + side], row['position_' + side])].add(
-                    (row[id_col], side))
-
-        for key in self.positions.keys():
-            self.positions[key] = sorted(self.positions[key])
+        self.breakends = (
+            create_breakends(breakpoints, id_col=id_col)
+            .sort_values(['chromosome', 'strand', 'position'])
+            .set_index(['chromosome', 'strand']))
 
     def query(self, row, extend=0):
-        matched_ids = list()
+        side_matches = {}
 
         for side in ('1', '2'):
-            chrom_strand_positions = self.positions[(row['chromosome_' + side], row['strand_' + side])]
-            idx = bisect.bisect_left(chrom_strand_positions, row['position_' + side] - extend)
-            side_matched_ids = list()
+            chromosome = row['chromosome_' + side]
+            strand = row['strand_' + side]
+            position = row['position_' + side]
 
-            while idx < len(chrom_strand_positions):
-                pos = chrom_strand_positions[idx]
-                dist = abs(pos - row['position_' + side])
+            idx1 = self.breakends.xs((chromosome, strand))['position'].searchsorted(position - extend)
+            idx2 = self.breakends.xs((chromosome, strand))['position'].searchsorted(position + extend, side='right')
 
-                if pos >= row['position_' + side] - extend and pos <= row['position_' + side] + extend:
-                    for break_id in self.break_ids[(row['chromosome_' + side], row['strand_' + side], pos)]:
-                        side_matched_ids.append((break_id, dist))
+            side_matches[side] = self.breakends.xs((chromosome, strand)).iloc[idx1:idx2]
 
-                if pos > row['position_' + side] + extend:
-                    break
-                idx += 1
-            matched_ids.append(side_matched_ids)
+        matches = pd.merge(
+            side_matches['1'],
+            side_matches['2'],
+            on=['prediction_id'],
+            suffixes=('_1', '_2'),
+        )
 
-        matched_ids_bypos = list()
-        for matched_id_1, dist_1 in matched_ids[0]:
-            for matched_id_2, dist_2 in matched_ids[1]:
-                if matched_id_1[0] == matched_id_2[0] and matched_id_1[1] != matched_id_2[1]:
-                    matched_ids_bypos.append((dist_1 + dist_2, matched_id_1[0]))
+        matches = matches.query('prediction_side_1 != prediction_side_2')
 
-        ids = set([v[1] for v in matched_ids_bypos])
-        return sorted(ids)
+        return set(matches['prediction_id'].values)
 
 
 def match_breakpoints(reference_breakpoints, target_breakpoints, window_size=500):
