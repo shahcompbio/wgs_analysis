@@ -18,6 +18,7 @@ def create_breakends(breakpoints, data_cols=(), id_col='prediction_id'):
 
 class BreakpointDatabase(object):
     def __init__(self, breakpoints, id_col='prediction_id'):
+        self.id_col = id_col
         self.breakends = (
             create_breakends(breakpoints, id_col=id_col)
             .sort_values(['chromosome', 'strand', 'position'])
@@ -39,13 +40,13 @@ class BreakpointDatabase(object):
         matches = pd.merge(
             side_matches['1'],
             side_matches['2'],
-            on=['prediction_id'],
+            on=[self.id_col],
             suffixes=('_1', '_2'),
         )
 
         matches = matches.query('prediction_side_1 != prediction_side_2')
 
-        return set(matches['prediction_id'].values)
+        return set(matches[self.id_col].values)
 
 
 def match_breakpoints(reference_breakpoints, target_breakpoints, window_size=500):
