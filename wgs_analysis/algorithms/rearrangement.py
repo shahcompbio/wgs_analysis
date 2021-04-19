@@ -32,6 +32,9 @@ class BreakpointDatabase(object):
             strand = row['strand_' + side]
             position = row['position_' + side]
 
+            if (chromosome, strand) not in self.breakends.index:
+                return set()
+
             idx1 = self.breakends.xs((chromosome, strand))['position'].searchsorted(position - extend)
             idx2 = self.breakends.xs((chromosome, strand))['position'].searchsorted(position + extend, side='right')
 
@@ -64,6 +67,6 @@ def match_breakpoints(reference_breakpoints, target_breakpoints, window_size=500
                 'reference_prediction_id': reference_prediction_id,
             })
 
-    match_data = pd.DataFrame(match_data)
+    match_data = pd.DataFrame(match_data, columns=['target_prediction_id', 'reference_prediction_id'])
 
     return match_data
