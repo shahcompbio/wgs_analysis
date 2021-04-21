@@ -2,6 +2,7 @@ import bisect
 import collections
 import pandas as pd
 import numpy as np
+import scipy
 
 
 def create_breakends(breakpoints, data_cols=(), id_col='prediction_id'):
@@ -70,4 +71,49 @@ def match_breakpoints(reference_breakpoints, target_breakpoints, id_col='predict
     match_data = pd.DataFrame(match_data, columns=['target_id', 'reference_id'])
 
     return match_data
+
+
+def identify_matched_breakpoints(breakpoints, window_size=500):
+    """ Identify common breakpoints.
+    
+    Args:
+        breakpoints (DataFrame): breakpoint data
+        
+    Returns:
+        DataFrame: breakpoints with component_id
+        
+    The component_id column will have the same value for similar breakpoints
+    """
+
+    breakpoints = breakpoints.copy()
+
+    breakpoints['idx'] = range(len(breakpoints.index))
+
+    self_matches = match_breakpoints(
+        breakpoints, breakpoints, id_col='idx', window_size=window_size)
+
+    row = self_matches['reference_id'].values
+    col = self_matches['target_id'].values
+    data = np.ones(len(self_matches.index))
+    max_index = self_matches[['reference_id', 'target_id']].max().max()
+
+    assert max_index == breakpoints['idx'].max()
+
+    matrix = scipy.sparse.csr_matrix((data, (row, col)), shape=(max_index + 1, max_index + 1))
+
+    num_components, component_ids = scipy.sparse.csgraph.connected_components(
+        matrix, directed=False, return_labels=True)
+
+    components = pd.DataFrame({
+        'idx': range(len(component_ids)),
+        'component_id': component_ids,
+    })
+
+    breakpoints = breakpoints.merge(components, how='outer')
+
+    assert not breakpoints['component_id'].isnull().any()
+    assert not breakpoints['idx'].isnull().any()
+    
+    return breakpoints
+
 
