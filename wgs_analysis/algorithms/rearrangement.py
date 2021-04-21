@@ -52,21 +52,22 @@ class BreakpointDatabase(object):
         return set(matches[self.id_col].values)
 
 
-def match_breakpoints(reference_breakpoints, target_breakpoints, window_size=500):
+def match_breakpoints(reference_breakpoints, target_breakpoints, id_col='prediction_id', window_size=500):
     """ Match similar target breakpoints to a set of reference breakpoints  
     """
 
-    reference_db = BreakpointDatabase(reference_breakpoints)
+    reference_db = BreakpointDatabase(reference_breakpoints, id_col=id_col)
 
     match_data = []
 
     for idx, row in target_breakpoints.iterrows():
-        for reference_prediction_id in reference_db.query(row, extend=window_size):
+        for reference_id in reference_db.query(row, extend=window_size):
             match_data.append({
-                'target_prediction_id': row['prediction_id'],
-                'reference_prediction_id': reference_prediction_id,
+                'target_id': row[id_col],
+                'reference_id': reference_id,
             })
 
-    match_data = pd.DataFrame(match_data, columns=['target_prediction_id', 'reference_prediction_id'])
+    match_data = pd.DataFrame(match_data, columns=['target_id', 'reference_id'])
 
     return match_data
+
