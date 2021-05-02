@@ -12,6 +12,10 @@ def reverse_complement(sequence):
     return sequence[::-1].translate(str.maketrans('ACTGactg','TGACtgac'))
 
 
+def complement(sequence):
+    return sequence.translate(str.maketrans('ACTGactg','TGACtgac'))
+
+
 def fit_sample_signatures(snvs_table, sig_prob, subset_col):
 
     # Filter samples with fewer than 100 SNVs
@@ -116,6 +120,113 @@ def load_signature_probabilities():
     sig_prob = sig_prob.set_index('tri_nuc_idx')[signature_cols]
 
     return sigs, sig_prob
+
+
+def normalize_trinucleotides(data):
+    """ Normalize trinucleotide reverse complementing consistent with cosmic
+
+    Args:
+        data (DataFrame): input snv data
+    
+    Returns:
+        DataFrame: snv data with output columns added
+
+    Required columns:
+        - ref
+        - alt
+        - tri_nucleotide_context
+
+    Output columns:
+        - mutation_type
+        - norm_mutation_type
+        - tri_nucleotide_context
+        - norm_tri_nucleotide_context
+    """
+
+    normalized_mutation_types = ['C>A', 'C>G', 'C>T', 'T>A', 'T>C', 'T>G']
+
+    def reverse_complement(sequence):
+        return sequence[::-1].translate(str.maketrans('ACTGactg','TGACtgac'))
+
+    def complement(sequence):
+        return sequence.translate(str.maketrans('ACTGactg','TGACtgac'))
+
+    norm_type_map = []
+    normalized_trinuc = []
+
+    for ref in ['A', 'C', 'T', 'G']:
+        for alt in ['A', 'C', 'T', 'G']:
+            if ref == alt:
+                continue
+
+            mutation_type = ref + '>' + alt
+            is_revcomp = mutation_type not in normalized_mutation_types
+
+            for left in ['A', 'C', 'T', 'G']:
+                for right in ['A', 'C', 'T', 'G']:
+
+                    trinuc = left + ref + right
+
+                    norm_mutation_type = mutation_type
+                    norm_trinuc = trinuc
+
+                    if mutation_type not in normalized_mutation_types:
+                        norm_mutation_type = complement(norm_mutation_type)
+                        norm_trinuc = reverse_complement(norm_trinuc)
+
+                    norm_type_map.append({
+                        'ref': ref,
+                        'alt': alt,
+                        'mutation_type': mutation_type,
+                        'norm_mutation_type': norm_mutation_type,
+                        'tri_nucleotide_context': trinuc,
+                        'norm_tri_nucleotide_context': norm_trinuc,
+                    })
+                    
+                    normalized_trinuc.append(norm_trinuc)
+
+    norm_type_map = pd.DataFrame(norm_type_map)
+    normalized_trinuc = list(sorted(set(normalized_trinuc)))
+
+    data = data.merge(norm_type_map, on=['ref', 'alt', 'tri_nucleotide_context'], how='left')
+
+    assert not data['norm_mutation_type'].isnull().any()
+    assert not data['norm_tri_nucleotide_context'].isnull().any()
+
+    return data
+
+
+def plot_mutation_spectra(data):
+    """ Plot 96 channel mutation spectra.
+
+    Args:
+        data (DataFrame): input snv data
+    
+    Returns:
+        Figure: mutation spectra figure
+
+    Required columns:
+        - ref
+        - alt
+        - tri_nucleotide_context
+    """
+
+    data = normalize_trinucleotides(data)
+
+    plot_data = (
+        data.groupby(['norm_mutation_type', 'norm_tri_nucleotide_context'])
+        .size().rename('count').sort_index().reset_index())
+    plot_data['index'] = range(plot_data.shape[0])
+
+    fig = plt.figure(figsize=(16, 3), dpi=300)
+    for mut_type, mut_type_data in plot_data.groupby('norm_mutation_type'):
+        plt.bar(x='index', height='count', data=mut_type_data, label=mut_type)
+    plt.xticks(plot_data['index'], plot_data['norm_tri_nucleotide_context'], rotation=90, font='monospace')
+    plt.xlim((-1, 97))
+    plt.legend(bbox_to_anchor=(1, 1), loc='upper left')
+    seaborn.despine(trim=True)
+
+    return fig
 
 
 def plot_cohort_mutation_signatures(
