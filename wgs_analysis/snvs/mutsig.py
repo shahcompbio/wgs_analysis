@@ -130,6 +130,7 @@ def normalize_trinucleotides(data):
     
     Returns:
         DataFrame: snv data with output columns added
+        DataFrame: snv type, trinucleotide, ordered for plotting
 
     Required columns:
         - ref
@@ -145,14 +146,7 @@ def normalize_trinucleotides(data):
 
     normalized_mutation_types = ['C>A', 'C>G', 'C>T', 'T>A', 'T>C', 'T>G']
 
-    def reverse_complement(sequence):
-        return sequence[::-1].translate(str.maketrans('ACTGactg','TGACtgac'))
-
-    def complement(sequence):
-        return sequence.translate(str.maketrans('ACTGactg','TGACtgac'))
-
     norm_type_map = []
-    normalized_trinuc = []
 
     for ref in ['A', 'C', 'T', 'G']:
         for alt in ['A', 'C', 'T', 'G']:
@@ -182,18 +176,24 @@ def normalize_trinucleotides(data):
                         'tri_nucleotide_context': trinuc,
                         'norm_tri_nucleotide_context': norm_trinuc,
                     })
-                    
-                    normalized_trinuc.append(norm_trinuc)
 
     norm_type_map = pd.DataFrame(norm_type_map)
-    normalized_trinuc = list(sorted(set(normalized_trinuc)))
+
+    ordered_types = (
+        norm_type_map[['norm_mutation_type', 'norm_tri_nucleotide_context']]
+        .drop_duplicates()
+        .sort_values(by=['norm_mutation_type', 'norm_tri_nucleotide_context']))
 
     data = data.merge(norm_type_map, on=['ref', 'alt', 'tri_nucleotide_context'], how='left')
+
+    mismerged = data[data['norm_mutation_type'].isnull()]
+    if not mismerged.empty:
+        raise Exception(f'unable to normalize, example: {mismerged.iloc[0]}')
 
     assert not data['norm_mutation_type'].isnull().any()
     assert not data['norm_tri_nucleotide_context'].isnull().any()
 
-    return data
+    return data, ordered_types
 
 
 def plot_mutation_spectra(data):
@@ -211,11 +211,15 @@ def plot_mutation_spectra(data):
         - tri_nucleotide_context
     """
 
-    data = normalize_trinucleotides(data)
+    data, ordered_types = normalize_trinucleotides(data)
 
     plot_data = (
         data.groupby(['norm_mutation_type', 'norm_tri_nucleotide_context'])
-        .size().rename('count').sort_index().reset_index())
+        .size().rename('count'))
+
+    plot_data = plot_data.reindex(
+        index=pd.MultiIndex.from_frame(ordered_types)).fillna(0).reset_index()
+
     plot_data['index'] = range(plot_data.shape[0])
 
     fig = plt.figure(figsize=(16, 3), dpi=300)
