@@ -201,6 +201,7 @@ def plot_cnv_genome(ax, cnv, maxcopies=4, minlength=1000, major_col='major_raw',
 
 
 def plot_cnv_chromosome(ax, cnv, chromosome, start=None, end=None, maxcopies=4, minlength=1000, major_col='major_raw', minor_col='minor_raw', fontsize=None, scatter=False, squashy=False, grid=True, yticks=None):
+def plot_cnv_chromosome(ax, cnv, chromosome, start=None, end=None, maxcopies=4, minlength=1000, major_col='major_raw', minor_col='minor_raw', fontsize=None, scatter=False, squashy=False, squash_coeff=None, grid=True, yticks=None):
     """
     Plot major/minor copy number across a chromosome
 
@@ -217,6 +218,9 @@ def plot_cnv_chromosome(ax, cnv, chromosome, start=None, end=None, maxcopies=4, 
         fontsize (int): size of x tick labels
         scatter (boolean): display segments as scatter points not segments
         squashy (boolean): squash the y axis to display all copy numbers
+        squash_coeff (float): coefficient for squashing y axis
+        grid (boolean): whether to display grid on plot
+        yticks (array): override y ticks
 
     """
 
@@ -227,7 +231,8 @@ def plot_cnv_chromosome(ax, cnv, chromosome, start=None, end=None, maxcopies=4, 
 
     cnv = cnv.copy()
 
-    squash_coeff = 0.15
+    if squash_coeff is None:
+        squash_coeff = 0.15
     squash_f = lambda a: np.tanh(squash_coeff * a)
     if squashy:
         cnv[major_col] = squash_f(cnv[major_col])
