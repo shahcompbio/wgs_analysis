@@ -52,7 +52,7 @@ def create_quads(df, field):
     return quads
 
 
-def plot_segments(ax, cnv, value_col, color, fill=False):
+def plot_segments(ax, cnv, value_col, color, fill=False, fill_alpha=0.5, lw=1):
     """
     Plot segment copy number as line plots
 
@@ -71,13 +71,13 @@ def plot_segments(ax, cnv, value_col, color, fill=False):
     cnv = cnv.sort_values('start')
 
     segments = create_segments(cnv, value_col)
-    ax.add_collection(matplotlib.collections.LineCollection(segments, colors=color, lw=1))
+    ax.add_collection(matplotlib.collections.LineCollection(segments, colors=color, lw=lw))
 
     connectors = create_connectors(cnv, value_col)
-    ax.add_collection(matplotlib.collections.LineCollection(connectors, colors=color, lw=1))
+    ax.add_collection(matplotlib.collections.LineCollection(connectors, colors=color, lw=lw))
 
     if fill:
-        quad_color = colorConverter.to_rgba(color, alpha=0.5)
+        quad_color = colorConverter.to_rgba(color, alpha=fill_alpha)
         quads = create_quads(cnv, value_col)
         ax.add_collection(matplotlib.collections.PolyCollection(quads, facecolors=quad_color, edgecolors=quad_color, lw=0))
 
