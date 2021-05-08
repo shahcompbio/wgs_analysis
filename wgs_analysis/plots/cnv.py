@@ -200,7 +200,6 @@ def plot_cnv_genome(ax, cnv, maxcopies=4, minlength=1000, major_col='major_raw',
     ax.yaxis.grid(True, which='major', linestyle=':')
 
 
-def plot_cnv_chromosome(ax, cnv, chromosome, start=None, end=None, maxcopies=4, minlength=1000, major_col='major_raw', minor_col='minor_raw', fontsize=None, scatter=False, squashy=False, grid=True, yticks=None):
 def plot_cnv_chromosome(ax, cnv, chromosome, start=None, end=None, maxcopies=4, minlength=1000, major_col='major_raw', minor_col='minor_raw', fontsize=None, scatter=False, squashy=False, squash_coeff=None, grid=True, yticks=None):
     """
     Plot major/minor copy number across a chromosome
