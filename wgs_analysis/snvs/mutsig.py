@@ -196,11 +196,14 @@ def normalize_trinucleotides(data):
     return data, ordered_types
 
 
-def plot_mutation_spectra(data):
+def plot_mutation_spectra(data, count_column=None):
     """ Plot 96 channel mutation spectra.
 
     Args:
         data (DataFrame): input snv data
+
+    KwArgs:
+        count_column (str): column designated already tabulated counts/proportions
     
     Returns:
         Figure: mutation spectra figure
@@ -213,9 +216,15 @@ def plot_mutation_spectra(data):
 
     data, ordered_types = normalize_trinucleotides(data)
 
-    plot_data = (
-        data.groupby(['norm_mutation_type', 'norm_tri_nucleotide_context'])
-        .size().rename('count'))
+    if count_column is None:
+        plot_data = (
+            data.groupby(['norm_mutation_type', 'norm_tri_nucleotide_context'])
+            .size().rename('count'))
+        count_column = 'count'
+
+    else:
+        plot_data = (
+            data.set_index(['norm_mutation_type', 'norm_tri_nucleotide_context']))
 
     plot_data = plot_data.reindex(
         index=pd.MultiIndex.from_frame(ordered_types)).fillna(0).reset_index()
@@ -224,7 +233,7 @@ def plot_mutation_spectra(data):
 
     fig = plt.figure(figsize=(16, 3), dpi=300)
     for mut_type, mut_type_data in plot_data.groupby('norm_mutation_type'):
-        plt.bar(x='index', height='count', data=mut_type_data, label=mut_type)
+        plt.bar(x='index', height=count_column, data=mut_type_data, label=mut_type)
     plt.xticks(plot_data['index'], plot_data['norm_tri_nucleotide_context'], rotation=90, font='monospace')
     plt.xlim((-1, 97))
     plt.legend(bbox_to_anchor=(1, 1), loc='upper left')
