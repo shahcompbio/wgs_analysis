@@ -176,7 +176,7 @@ def annotate_cnv_type(copies):
     return copies
 
 
-def annotate_position_cnv(positional, cnv):
+def annotate_position_cnv(positional, cnv, index_cols=()):
     """ Add cnv columns to positional data
 
     Args:
@@ -190,7 +190,7 @@ def annotate_position_cnv(positional, cnv):
 
     cnv = cnv.merge(merged, on=['chrom', 'start', 'end']).drop(['start', 'end'], axis=1)
 
-    positional = positional.merge(cnv, on=['site_id', 'chrom', 'coord'])
+    positional = positional.merge(cnv, on=['chrom', 'coord'] + list(index_cols))
 
     return positional
 
