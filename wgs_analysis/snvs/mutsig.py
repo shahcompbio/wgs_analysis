@@ -5,6 +5,7 @@ import scipy.stats
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+import matplotlib.font_manager
 import pkg_resources
 
 
@@ -231,10 +232,13 @@ def plot_mutation_spectra(data, count_column=None):
 
     plot_data['index'] = range(plot_data.shape[0])
 
+    font = matplotlib.font_manager.FontProperties()
+    font.set_family('monospace')
+
     fig = plt.figure(figsize=(16, 3), dpi=300)
     for mut_type, mut_type_data in plot_data.groupby('norm_mutation_type'):
         plt.bar(x='index', height=count_column, data=mut_type_data, label=mut_type)
-    plt.xticks(plot_data['index'], plot_data['norm_tri_nucleotide_context'], rotation=90, font='monospace')
+    plt.xticks(plot_data['index'], plot_data['norm_tri_nucleotide_context'], rotation=90, fontproperties=font)
     plt.xlim((-1, 97))
     plt.legend(bbox_to_anchor=(1, 1), loc='upper left')
     seaborn.despine(trim=True)
