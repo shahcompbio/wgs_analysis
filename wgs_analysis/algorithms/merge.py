@@ -13,10 +13,14 @@ def position_segment_merge(positions, segments):
     Returns:
         pandas.DataFrame: merged table with ['chrom', 'coord', 'start', 'end'] columns
 
-    
     Assuming a set of non-overlapping segments, merge a set of positions so that
     each entry in the new table provides coord and containing segment start/end
     """
+
+    # Check if any segments overlap
+    for chromosome, df in segments.groupby('chrom'):
+        if (df['start'].values[1:] < df['end'][:-1]).any():
+            raise Exception('overlapping segments')
 
     positions = positions[['chrom', 'coord']].copy()
     segments = segments[['chrom', 'start', 'end']].copy()
