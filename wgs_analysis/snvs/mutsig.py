@@ -5,6 +5,7 @@ import scipy.stats
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+import pyfaidx
 import matplotlib.font_manager
 import pkg_resources
 
@@ -295,3 +296,24 @@ def plot_cohort_mutation_signatures(
     results['node_signature_boxplots'] = plot_signature_boxplots(node_sig)
 
     return results
+
+
+def calculate_tri_nucleotide_context(data, ref_genome_fasta):
+    """ Calculate trinucleotide context and add as column
+    """
+
+    ref_genome = pyfaidx.Fasta(ref_genome_fasta, rebuild=False)
+
+    data['tri_nucleotide_context'] = None
+
+    for idx, row in data.iterrows():
+        tnc = str(ref_genome[row['chrom']][row['coord']-2:row['coord']+1])
+        assert len(tnc) == 3
+        assert tnc[1] == row['ref']
+        data.loc[idx, 'tri_nucleotide_context'] = tnc
+
+    assert data['tri_nucleotide_context'].notnull().all()
+
+    return data
+
+
