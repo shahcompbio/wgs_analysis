@@ -2,7 +2,7 @@ import bisect
 import collections
 import pandas as pd
 import numpy as np
-import scipy
+import scipy.sparse
 
 
 def create_breakends(breakpoints, data_cols=(), id_col='prediction_id'):
