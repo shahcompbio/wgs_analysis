@@ -1,0 +1,2 @@
+include versioneer.py
+include wgs_analysis/_version.py
