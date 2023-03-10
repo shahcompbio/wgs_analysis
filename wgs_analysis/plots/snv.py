@@ -84,6 +84,42 @@ def snv_adjacent_distance_plot(ax, snvs):
     seaborn.despine(trim=True)
 
 
+def snv_genome_vaf_plot(ax, snvs):
+    snvs = snvs.drop_duplicates(['chrom', 'coord'])
+
+    snvs = snvs.loc[(snvs['chrom'].isin(refgenome.info.chromosomes))]
+
+    snvs.set_index('chrom', inplace=True)
+    snvs['chromosome_start'] = refgenome.info.chromosome_start
+    snvs['chromosome_color'] = pd.Series(plots.colors.create_chromosome_color_map())
+    snvs.reset_index(inplace=True)
+
+    snvs['plot_coord'] = snvs['coord'] + snvs['chromosome_start']
+
+    assert not snvs['chromosome_color'].isnull().any()
+
+    ax.scatter(
+        snvs['plot_coord'],
+        snvs['vaf'], 
+        facecolors=list(snvs['chromosome_color']),
+        edgecolors=list(snvs['chromosome_color']),
+        alpha=0.5, s=5, lw=0)
+
+    ax.set_xlabel('chromosome')
+    ax.set_xlim(min(snvs['plot_coord']), max(snvs['plot_coord']))
+    ax.set_xticks([0] + list(wgs_analysis.refgenome.info.chromosome_end.values))
+    ax.set_xticklabels([])
+    ax.xaxis.tick_bottom()
+    ax.yaxis.tick_left()
+    ax.xaxis.set_minor_locator(matplotlib.ticker.FixedLocator(wgs_analysis.refgenome.info.chromosome_mid))
+    ax.xaxis.set_minor_formatter(matplotlib.ticker.FixedFormatter(wgs_analysis.refgenome.info.chromosomes))
+
+    ax.set_ylim(-0.01, 1.01)
+    ax.set_ylabel('VAF')
+
+    seaborn.despine(trim=True)
+
+
 def snv_count_plot(ax, snvs, bin_size=10000000, full_genome=True):
     snvs = snvs.loc[(snvs['chrom'].isin(refgenome.info.chromosomes))].copy()
 
