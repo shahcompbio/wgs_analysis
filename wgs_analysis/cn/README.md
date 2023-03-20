@@ -6,7 +6,7 @@ from wgs_analysis.cn import cn_utils
 ## Initiate CN data for selected cohorts
 ```python
 gene_list_path = '/juno/work/shah/users/chois7/tickets/cohort-cn-qc/resources/gene_list.txt'
-cohorts = ['SPECTRUM', 'Metacohort'] # ['SPECTRUM'], ['Metacohort']
+cohorts = ['SPECTRUM', 'Metacohort'] # or ['SPECTRUM'], ['Metacohort'], ['SPECTRUM-DLP']
 cn = cn_utils.CopyNumberChangeData(gene_list=gene_list_path, cohorts=cohorts)
 cohort_symbol = '_'.join(cn.cohorts) # for filename
 ```
