@@ -302,6 +302,7 @@ def make_gene_pos_table(gene_list:set) -> dict:
         logging.debug(f'{row.symbol}, {row.cds_start}')
     return gene_pos_table
 
+@beartype
 def get_norm_values_and_color(df:pd.DataFrame, chrom:str, pos:int, bin_size=500000) -> tuple:
     """ Get (y-coord, color) for normalized aggregate CN counts
     """
