@@ -10,14 +10,17 @@ import matplotlib
 import matplotlib.pyplot as plt
 import matplotlib.ticker as mtick
 import matplotlib.font_manager as font_manager
+from matplotlib.collections import BrokenBarHCollection
 import pandas as pd
 import numpy as np
 import pyranges as pr
 from beartype import beartype
 from fisher import pvalue 
+from statsmodels.stats import multitest
 
 import wgs_analysis.refgenome
 import wgs_analysis.plots.cnv
+from wgs_qc_utils.reader.ideogram import read_ideogram
 import shahlabdata.wgs
 
 
@@ -96,7 +99,7 @@ def rebin(data:pd.DataFrame, bin_size:int, cols:list, chroms:list) -> pd.DataFra
     return intersect[['chromosome', 'start', 'end'] + cols]
 
 @beartype
-def get_per_sample_data_and_ploidy(cn_data:pd.DataFrame) -> tuple:
+def get_per_sample_data_and_ploidy(cn_data:pd.DataFrame, bin_size:int) -> tuple:
     """ Separate cn_data to create table per sample and a ploidy series
     """
     chroms = wgs_analysis.refgenome.info.chromosomes[:-1]
@@ -112,7 +115,7 @@ def get_per_sample_data_and_ploidy(cn_data:pd.DataFrame) -> tuple:
         sample_cn['total_raw'] = sample_cn['minor_raw_e'] + sample_cn['major_raw_e']
 
         sample_cn = sample_cn[sample_cn['is_valid']]
-        sample_cn = rebin(sample_cn, 500000, ['total_raw'], chroms)
+        sample_cn = rebin(sample_cn, bin_size, ['total_raw'], chroms)
         sample_cn = sample_cn.set_index(['chromosome', 'start', 'end'])
 
         data[sample_id] = sample_cn['total_raw']
@@ -428,7 +431,7 @@ def calc_gene_x_coord(gene_chrom:str, gene_pos:int,
     return chrom_size_sum
 
 @beartype
-def get_chrom_arm_coords(centromere_table:pd.DataFrame) -> pd.DataFrame:
+def get_chrom_arm_coords(centromere_table:pd.DataFrame, per_chromosome=False) -> pd.DataFrame:
     """ Get cumulative start-end positions for p- and q-arms
     """
     arms = pd.DataFrame(columns=['chromosome', 'start', 'end', 'length', 'tag'])
@@ -454,6 +457,14 @@ def get_chrom_arm_coords(centromere_table:pd.DataFrame) -> pd.DataFrame:
         })
         arms = pd.concat([arms, p_arm, q_arm])
     arms.sort_values(by=['start'], inplace=True)
+    arms.reset_index(drop=True, inplace=True)
+    
+    if per_chromosome:
+        for rix, row in arms.iterrows():
+            chrom = row['chromosome']
+            chrom_start = wgs_analysis.refgenome.info.chromosome_start[chrom]
+            arms.loc[rix, 'start'] -= chrom_start
+            arms.loc[rix, 'end'] -= chrom_start
     return arms
 
 @beartype
@@ -469,7 +480,7 @@ def make_p_arm_rectangle(chrom:str, arms:pd.DataFrame) -> plt.Rectangle:
     return p_arm
 
 @beartype
-def get_gene_ranges(gene_list:list) -> dict:
+def get_gene_ranges(gene_list:set) -> dict:
     """ Return dict[gene] -> (chrom, cDNA start, cDNA end) from refFlat [external]
     """
     refflat_path = "/home/chois7/ondemand/spectrumanalysis/analysis/notebooks/bulk-dna/data/refFlat.txt.gz"
@@ -509,8 +520,9 @@ def get_arial_fonts() -> tuple:
 def get_cn_change(cn_data:pd.DataFrame, chroms:list) -> pd.DataFrame:
     """ Finalize CN change ready for plotting by creating, filtering, normalizing, and labeling it
     """
+    bin_size = 500000
     sample_counts = cn_data['isabl_sample_id'].unique().shape[0]
-    data, ploidy = get_per_sample_data_and_ploidy(cn_data)
+    data, ploidy = get_per_sample_data_and_ploidy(cn_data, bin_size=bin_size)
     mean_above_background = get_mean_above_background(data)
     cn_change_table = create_cn_change_table(data, ploidy, mean_above_background)
 
@@ -519,8 +531,8 @@ def get_cn_change(cn_data:pd.DataFrame, chroms:list) -> pd.DataFrame:
 
     cn_change_table = normalize_cn_change(cn_change_table, sample_counts)
 
-    filled_table = get_filled_table(cn_change_table, chrom_size_table, chroms=chroms, bin_size=500000)
-    plot_data = label_centromere_regions(filled_table, centromere_table, chroms=chroms, bin_size=500000)
+    filled_table = get_filled_table(cn_change_table, chrom_size_table, chroms=chroms, bin_size=bin_size)
+    plot_data = label_centromere_regions(filled_table, centromere_table, chroms=chroms, bin_size=bin_size)
     plot_data.loc[plot_data['centromere'], ['norm_gain', 'norm_loss']] = 0.0 # remove CN from centromeric regions
     # plot_data[cohort].to_csv(args.out_table, sep='\t', index=False)
     return plot_data
@@ -608,6 +620,156 @@ def make_merged_cn_data(cohorts=['Metacohort', 'SPECTRUM']) -> tuple:
     
     return cn_changes, signature_counts
 
+@beartype
+def evaluate_enrichment(signatures:Iterable, signature_counts:dict, 
+        gene_list:Iterable, sample_counts:int, padj_cutoff=0.1) -> pd.DataFrame:
+    results = pd.DataFrame(columns=['gene', 'signature', 'type', 'a', 'b', 'c', 'd', 'odds_ratio', 'p'])
+    ix = 0
+    for signature in signatures:
+        n_signature = signature_counts[signature]
+        for gene in gene_list:
+            for cn_type in ('gain', 'loss',):
+                n_cn = sum([gene_cn[cn_type][sig][gene] for sig in signatures])
+                sig_o_cn_o = gene_cn[cn_type][signature][gene] # a
+                sig_o_cn_x = n_signature - sig_o_cn_o # b
+                sig_x_cn_o = n_cn - sig_o_cn_o # c
+                sig_x_cn_x = sample_counts - sig_o_cn_o - sig_o_cn_x - sig_x_cn_o # d
+                assert (sig_o_cn_o + sig_o_cn_x + sig_x_cn_o + sig_x_cn_x) == sample_counts
+                if sig_o_cn_x * sig_x_cn_o == 0: odds_ratio = 'inf'
+                else: odds_ratio = (sig_o_cn_o * sig_x_cn_x) / (sig_o_cn_x * sig_x_cn_o)
+                lst = [sig_o_cn_o, sig_o_cn_x, sig_x_cn_o, sig_x_cn_x]
+                p = pvalue(*lst).two_tail
+                row = [gene, signature, cn_type, sig_o_cn_o, sig_o_cn_x, sig_x_cn_o, sig_x_cn_x, odds_ratio, p]
+                results.loc[ix] = row
+                ix += 1
+    pvalues = results['p']
+    multipletesting = multitest.multipletests(fet['pvalue'], method='fdr_bh', alpha=padj_cutoff)
+    accepts = multipletesting[0]
+    padjs = multipletesting[1]
+    results['p.adj'] = padjs
+    results['significant'] = accepts
+    return results
+
+@beartype
+def get_nrow_ncol(chromosomes:Iterable) -> tuple:
+    nrows = 1 # subplot nrows of plot
+    ncols = 3 # subplot ncols of plot
+    while nrows * ncols < len(chromosomes):
+        nrows += 1
+    return nrows, ncols
+
+@beartype
+def get_ideogram_and_chroms(gene_ranges:dict, chroms:Iterable):
+    ideogram = read_ideogram.read()
+    ideogram['chrom'] = ideogram['chrom'].str.upper()
+
+    gene_chroms = [gene_ranges[g][0] for g in gene_ranges]
+    gene_chroms = [c for c in chroms if c in gene_chroms]
+
+    ideogram = ideogram[ideogram['chrom'].isin(gene_chroms)]
+    return ideogram, gene_chroms
+
+@beartype
+def ideogram_plot(ideogram:pd.DataFrame, axis:matplotlib.axes.Axes) -> matplotlib.axes.Axes:
+    xranges = ideogram[['start', 'width']].values
+    colors = ideogram["color"].values
+    collection = BrokenBarHCollection(xranges, (-0.05, 0.09), facecolors=colors, alpha=0.8, zorder=5)
+    axis.add_collection(collection)
+    axis.set_xlim(0, ideogram.start.max())
+    axis.set_ylim(-1, 1)
+    axis.get_yaxis().set_visible(False)
+    axis.set_xticks(np.arange(0, ideogram.start.max(), 25))
+    return axis
+
+@beartype
+def set_axis_style(ax:matplotlib.axes.Axes, chrom:str, fontprop:matplotlib.font_manager.FontProperties) -> None:
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+    ax.spines['left'].set_visible(False)
+    ax.set_title(f'chr{chrom}', fontproperties=fontprop, fontsize=13)
+    ax.set_xlabel('Mbp', loc='right', fontproperties=fontprop, fontsize=11)
+         
+@beartype
+def annotate_genes(chrom_df:pd.DataFrame, chrom_genes:dict, ax:matplotlib.axes.Axes, 
+        italic_fontprop:matplotlib.font_manager.FontProperties, 
+        bin_size:int, factor:int) -> None:
+    prev_ys = []
+    for gene, (chrom, start, end) in chrom_genes.items():
+        # gene CN
+        round_start = (start // bin_size) * bin_size
+        round_end = (end // bin_size) * bin_size
+        gene_df = chrom_df[
+            (chrom_df['start'] == round_start) |
+            (chrom_df['end'] == round_end)
+        ]
+        cn = gene_df['norm_gain'].mean() - gene_df['norm_loss'].mean()
+        cn_sign = 1 if cn >= 0 else -1
+
+        # gene plot coords
+        start /= factor
+        end /= factor
+        width = end - start
+        gene_y = cn + cn_sign * 0.4
+        for prev_y in prev_ys:
+            while abs(prev_y - gene_y) < 0.1:
+                gene_y *= 1.1
+        prev_ys.append(gene_y)
+        if gene_y >= 0: gene_y = min(0.8, gene_y)
+        else: gene_y = max(-0.8, gene_y)
+        gene_patch = plt.Rectangle((start, 0), width, gene_y, color='gray', alpha=0.7, zorder=3)
+        ax.add_patch(gene_patch)
+        
+        # add gene symbol
+        text_x = start
+        text_y = (gene_y + 0.07) if gene_y >= 0 else gene_y - 0.07
+        if chrom == '16':
+            # print(gene, text_x, text_y)
+            ax.set_xlim((None, 93))
+        ax.annotate(gene, (text_x, text_y), ha='center', va='center', # non-italic
+                    fontproperties=italic_fontprop, fontsize=12)
+
+@beartype
+def plot_gain_and_loss(chrom_df:pd.DataFrame, ax:matplotlib.axes.Axes, factor:int,
+        fontprop:matplotlib.font_manager.FontProperties) -> None:
+    """ Plot gain and loss per chromosome aggregate cn changes dataframe
+    """
+    color_gain = plt.get_cmap('RdBu')(0.1)
+    color_loss = plt.get_cmap('RdBu')(0.9)
+
+    for gix, gdf in chrom_df.groupby('group'):
+        xs = [val/factor for pair in zip(gdf['start'], gdf['end']) for val in pair]
+        gains = [val for pair in zip(gdf['norm_gain'], gdf['norm_gain']) for val in pair]
+        losses = [-val for pair in zip(gdf['norm_loss'], gdf['norm_loss']) for val in pair]
+        ax.plot(xs, gains, lw=1, color=color_gain)
+        ax.plot(xs, losses, lw=1, color=color_loss)
+        zeros = np.zeros(len(xs))
+        ax.fill_between(xs, gains, where=gains>zeros, color=color_gain)
+        ax.fill_between(xs, losses, where=losses<zeros, color=color_loss)
+
+    last_xtick_label = int(chrom_df['end'].iloc[-1] / factor // 25) * 25
+    xtick_labels = [int(i) for i in range(0, last_xtick_label+1, 25)]
+    ax.set_xticklabels(xtick_labels, fontproperties=fontprop)
+
+@beartype
+def proc_cn_changes(df:pd.DataFrame) -> pd.DataFrame:
+    """ Label contiguous groups of cn changes table
+    """
+    # remove centromere
+    df = df[~df['centromere']]
+
+    # label contiguous groups
+    df['contiguous'] = df.shift(-1)['start'] == df['end']
+    df['contiguous'].iloc[-1] = True
+    group = 0
+    df.loc[:, 'group'] = 0
+    for rix, row in df.iterrows():
+        if not row['contiguous']:
+            df.loc[rix, 'group'] = group
+            group += 1
+            continue
+        df.loc[rix, 'group'] = group
+    return df
+
 
 class CopyNumberChangeData:
     def __init__(self, cohorts=['Metacohort', 'SPECTRUM'], gene_list=None,
@@ -626,7 +788,10 @@ class CopyNumberChangeData:
             raise TypeError(f'Type of gene_list is neither str or Iterable: {gene_list}')
 
         self.gene_pos_table = make_gene_pos_table(self.gene_list)
+        self.gene_ranges = get_gene_ranges(self.gene_list)
         self.cn_changes, self.signature_counts = make_merged_cn_data(self.cohorts)
+        signatures_to_exclude = ['merged', 'HRD-Other']
+        self.signatures = [s for s in self.signature_counts.keys() if s not in signatures_to_exclude]
         self.sample_counts = self.signature_counts['merged']
         self.centromere_table = get_chromosome_gap_band_data()
         self.arms = get_chrom_arm_coords(self.centromere_table)
@@ -634,11 +799,32 @@ class CopyNumberChangeData:
         self.factor = factor
         #self.out_path = 
 
+    def get_gene_cn_counts(self):
+        gene_cn = {'gain':defaultdict(dict), 'loss':defaultdict(dict)}
+        for signature in self.signatures:
+            for gene, (chrom, start, end) in self.gene_ranges.items():
+                df = self.cn_changes[signature].copy()
+                start_bin = (start // self.bin_size) * self.bin_size
+                end_bin = (end // self.bin_size) * self.bin_size
+                df = df[df['chromosome']==chrom]
+                df = df[(df['start'] == start_bin) | (df['end'] == end_bin)]
+                if df.shape[0] > 0:
+                    start_dist = abs(start - start_bin)
+                    end_dist = abs(end - end_bin)
+                    if start_dist > end_dist:
+                        df = df[df['end'] == end_bin]
+                    else:
+                        df = df[df['start'] == start_bin]
+                gene_cn['gain'][signature][gene] = int(df['gain'])
+                gene_cn['loss'][signature][gene] = int(df['loss'])
+        return gene_cn
+
     def plot_pan_chrom_cn(self, group='merged', out_path=None):
         cohorts_tag = ' + '.join(self.cohorts)
-        counts = signature_counts[group]
-        counts_tag = f'n={counts}' if counts==self.sample_counts else f'n={counts}/{sample_counts}'
-        plot_title = f'{cohorts_tag} (n={counts_tag})'
+        if group != 'merged': cohorts_tag = f'{cohorts_tag} : {group}'
+        counts = self.signature_counts[group]
+        counts_tag = f'n={counts}' if counts==self.sample_counts else f'n={counts}/{self.sample_counts}'
+        plot_title = f'{cohorts_tag} ({counts_tag})'
         with matplotlib.rc_context({'font.family':'Arial', 'font.size': 15}):
             # Draw GISTIC summary plot
             plot_data = self.cn_changes[group]
@@ -667,16 +853,70 @@ class CopyNumberChangeData:
             if out_path:
                 plt.savefig(out_path)
 
-    def plot_per_chrom_cn(self, out_path):
-        cohort_symbol = ' + '.join(self.cohorts)
-        plot_title = f'{cohort_symbol} (n={self.sample_counts})'
+    def plot_per_chrom_cn(self, group='merged', out_path=None):
+        df = proc_cn_changes(self.cn_changes[group])
+        ideogram, gene_chroms = get_ideogram_and_chroms(self.gene_ranges, self.chroms)
+        arms = get_chrom_arm_coords(self.centromere_table, per_chromosome=True)
+
+        cohorts_tag = ' + '.join(self.cohorts)
+        if group != 'merged': cohorts_tag = f'{cohorts_tag} : {group}'
+        counts = self.signature_counts[group]
+        counts_tag = f'n={counts}' if counts==self.sample_counts else f'n={counts}/{self.sample_counts}'
+        plot_title = f'{cohorts_tag} ({counts_tag})'
+        nrows, ncols = get_nrow_ncol(gene_chroms)
+        fig = plt.figure(figsize=(15, 3*nrows))
+        fig.suptitle(f'{plot_title}\n', fontsize=16, fontproperties=self.fontprop)
+        n_subplots = nrows * ncols
+        gs = fig.add_gridspec(nrows, ncols)
+        axes = [plt.subplot(cell) for cell in gs]
+
+        bin_size = self.bin_size
+        factor = self.factor
+
+        for ix, chrom in enumerate(gene_chroms):
+            chrom_df = df[df['chromosome']==chrom]
+            ax = axes[ix]
+            set_axis_style(ax, chrom, self.fontprop)
+            
+            # make p arm patch
+            p_arm = make_p_arm_rectangle(chrom, arms)
+            ax.add_patch(p_arm)
+            
+            # plot and fill gains and losses
+            plot_gain_and_loss(chrom_df, ax, factor, self.fontprop)
+                
+            # plot ideogram
+            prepped_ideogram = ideogram[ideogram['chrom']==chrom]
+            ideogram_plot(prepped_ideogram, ax)
+            
+            # plot gene region
+            chrom_genes = {g: self.gene_ranges[g] for g in self.gene_ranges
+                           if self.gene_ranges[g][0] == chrom}
+            annotate_genes(chrom_df, chrom_genes, ax, 
+                italic_fontprop=self.italic_fontprop, bin_size=bin_size, factor=factor)
+
+        for ix in range(ix+1, n_subplots):
+            axes[ix].axis('off')
+        plt.tight_layout()
+
+        # Save plot to png
+        if out_path:
+            plt.savefig(out_path)
+
         
-# logging.basicConfig(level = logging.INFO)
-# gene_list_path = '/juno/work/shah/users/chois7/tickets/cohort-cn-qc/resources/gene_list.txt'
-# for cohorts in (['SPECTRUM'], ['Metacohort'], ['SPECTRUM', 'Metacohort']):
-#     cn = CopyNumberChangeData(gene_list=gene_list_path, cohorts=cohorts)
-#     cohort_symbol = '_'.join(cn.cohorts)
-#     for signature in cn.signature_counts:
-#         logging.info(f'processing cohorts:{cohorts} signature:{signature}')
-#         if signature != 'merged' and cn.signature_counts[signature] > 3:
-#             cn.plot_pan_chrom_cn(group=signature, out_path=f'{cohort_symbol}.{signature}.pdf')
+logging.basicConfig(level = logging.INFO)
+gene_list_path = '/juno/work/shah/users/chois7/tickets/cohort-cn-qc/resources/gene_list.txt'
+for cohorts in (['SPECTRUM'], ['Metacohort'], ['SPECTRUM', 'Metacohort']):
+    cn = CopyNumberChangeData(gene_list=gene_list_path, cohorts=cohorts)
+    cohort_symbol = '_'.join(cn.cohorts)
+    for signature in cn.signature_counts:
+        logging.info(f'processing cohorts:{cohorts} signature:{signature}')
+        if cn.signature_counts[signature] > 5:
+            logging.info(f'plotting cohorts:{cohorts} signature:{signature}')
+            cn.plot_pan_chrom_cn(group=signature, out_path=f'{cohort_symbol}.{signature}.pdf')
+            cn.plot_per_chrom_cn(group=signature, out_path=f'{cohort_symbol}.{signature}.per-chrom.pdf')
+
+gene_cn = cn.get_gene_cn_counts()
+results = evaluate_enrichment(cn.signatures, cn.signature_counts, cn.gene_list, 
+        cn.sample_counts, padj_cutoff=0.1)
+results.to_csv('fet.tsv', sep='\t', index=False)
