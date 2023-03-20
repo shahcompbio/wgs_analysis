@@ -1,6 +1,7 @@
 import os
 import sys
 import gzip
+import glob
 import argparse
 import logging
 from collections import defaultdict 
@@ -14,6 +15,7 @@ from matplotlib.collections import BrokenBarHCollection
 import pandas as pd
 import numpy as np
 import pyranges as pr
+import anndata
 from beartype import beartype
 from fisher import pvalue 
 from statsmodels.stats import multitest
@@ -99,7 +101,7 @@ def rebin(data:pd.DataFrame, bin_size:int, cols:list, chroms:list) -> pd.DataFra
     return intersect[['chromosome', 'start', 'end'] + cols]
 
 @beartype
-def get_per_sample_data_and_ploidy(cn_data:pd.DataFrame, bin_size:int) -> tuple:
+def get_per_sample_data_and_ploidy(cn_data:pd.DataFrame, bin_size:int, has_dlp=bool) -> tuple:
     """ Separate cn_data to create table per sample and a ploidy series
     """
     chroms = wgs_analysis.refgenome.info.chromosomes[:-1]
@@ -107,19 +109,32 @@ def get_per_sample_data_and_ploidy(cn_data:pd.DataFrame, bin_size:int) -> tuple:
     ploidy = {}
 
     for sample_id, sample_cn in cn_data.groupby('isabl_sample_id'):
-        sample_cn['is_valid'] = (
-            (sample_cn['length'] > 100000) &
-            (sample_cn['minor_readcount'] > 100) &
-            (sample_cn['length_ratio'] > 0.8))
+        if not has_dlp: # WGS
+            sample_cn['is_valid'] = (
+                (sample_cn['length'] > 100000) &
+                (sample_cn['minor_readcount'] > 100) &
+                (sample_cn['length_ratio'] > 0.8))
 
-        sample_cn['total_raw'] = sample_cn['minor_raw_e'] + sample_cn['major_raw_e']
+            sample_cn['total_raw'] = sample_cn['minor_raw_e'] + sample_cn['major_raw_e']
 
-        sample_cn = sample_cn[sample_cn['is_valid']]
-        sample_cn = rebin(sample_cn, bin_size, ['total_raw'], chroms)
-        sample_cn = sample_cn.set_index(['chromosome', 'start', 'end'])
+            sample_cn = sample_cn[sample_cn['is_valid']]
+            sample_cn = rebin(sample_cn, bin_size, ['total_raw'], chroms)
+            sample_cn = sample_cn.set_index(['chromosome', 'start', 'end'])
 
-        data[sample_id] = sample_cn['total_raw']
-        ploidy[sample_id] = sample_cn['total_raw'].mean()
+            data[sample_id] = sample_cn['total_raw']
+            ploidy[sample_id] = sample_cn['total_raw'].mean()
+
+        else:
+            sample_cn['is_valid'] = (
+                (sample_cn['is_valid']) &
+                (sample_cn['length'] > 100000)
+            )
+            sample_cn = sample_cn[sample_cn['is_valid']]
+            sample_cn = rebin(sample_cn, bin_size, ['cn'], chroms)
+            sample_cn = sample_cn.set_index(['chromosome', 'start', 'end'])
+
+            data[sample_id] = sample_cn['cn']
+            ploidy[sample_id] = sample_cn['cn'].mean()
 
     data = pd.DataFrame(data)
     ploidy = pd.Series(ploidy)
@@ -517,12 +532,12 @@ def get_arial_fonts() -> tuple:
     return fontprop, italic_fontprop
 
 @beartype
-def get_cn_change(cn_data:pd.DataFrame, chroms:list) -> pd.DataFrame:
+def get_cn_change(cn_data:pd.DataFrame, chroms:list, has_dlp:bool) -> pd.DataFrame:
     """ Finalize CN change ready for plotting by creating, filtering, normalizing, and labeling it
     """
     bin_size = 500000
     sample_counts = cn_data['isabl_sample_id'].unique().shape[0]
-    data, ploidy = get_per_sample_data_and_ploidy(cn_data, bin_size=bin_size)
+    data, ploidy = get_per_sample_data_and_ploidy(cn_data, bin_size=bin_size, has_dlp=has_dlp)
     mean_above_background = get_mean_above_background(data)
     cn_change_table = create_cn_change_table(data, ploidy, mean_above_background)
 
@@ -538,35 +553,104 @@ def get_cn_change(cn_data:pd.DataFrame, chroms:list) -> pd.DataFrame:
     return plot_data
 
 @beartype
-def get_metacohort_spectrum_signatures(cn_data:pd.DataFrame) -> pd.DataFrame:
+def get_signature_table(cn_data:pd.DataFrame, has_dlp:bool) -> pd.DataFrame:
     """ Return dataframe of ['sample', 'signature'] for SPECTRUM [external] and Metacohort [external]
     """
-    spectrum_signature_path = '/juno/work/shah/users/chois7/spectrum/dlp/cn/mutational_signatures.tsv'
-    metacohort_signature_path = '/juno/work/shah/users/chois7/metacohort/mmctm/resources/Tyler_2022_Nature_labels.isabl.tsv'
     columns = ['sample', 'signature']
-    spectrum_ix = cn_data['isabl_sample_id'].str.startswith('SPECTRUM')
-    cn_data.loc[spectrum_ix, 'sample'] = cn_data.loc[spectrum_ix, 'isabl_sample_id'].str.slice(0, 15)
-    cn_data.loc[~spectrum_ix, 'sample'] = cn_data.loc[~spectrum_ix, 'isabl_sample_id']
-    spectrum_signature = pd.read_table(spectrum_signature_path)[['patient_id', 'consensus_signature']]
-    spectrum_signature.columns = columns
-    metacohort_signature = pd.read_table(metacohort_signature_path)[['isabl_sample_id', 'stratum']]
-    metacohort_signature.columns = columns
-    signatures = pd.concat([spectrum_signature, metacohort_signature])
+    if not has_dlp:
+        spectrum_signature_path = '/juno/work/shah/users/chois7/spectrum/dlp/cn/mutational_signatures.tsv'
+        metacohort_signature_path = '/juno/work/shah/users/chois7/metacohort/mmctm/resources/Tyler_2022_Nature_labels.isabl.tsv'
+        spectrum_ix = cn_data['isabl_sample_id'].str.startswith('SPECTRUM')
+        cn_data.loc[spectrum_ix, 'sample'] = cn_data.loc[spectrum_ix, 'isabl_sample_id'].str.slice(0, 15)
+        cn_data.loc[~spectrum_ix, 'sample'] = cn_data.loc[~spectrum_ix, 'isabl_sample_id']
+        spectrum_signature = pd.read_table(spectrum_signature_path)[['patient_id', 'consensus_signature']]
+        spectrum_signature.columns = columns
+        metacohort_signature = pd.read_table(metacohort_signature_path)[['isabl_sample_id', 'stratum']]
+        metacohort_signature.columns = columns
+        signatures = pd.concat([spectrum_signature, metacohort_signature])
+    else:
+        spectrum_signature_path = '/juno/work/shah/users/chois7/spectrum/dlp/cn/mutational_signatures.tsv'
+        spectrum_ix = cn_data['isabl_sample_id'].str.startswith('SPECTRUM')
+        cn_data.loc[spectrum_ix, 'sample'] = cn_data.loc[spectrum_ix, 'isabl_sample_id'].str.slice(0, 15)
+        cn_data.loc[~spectrum_ix, 'sample'] = cn_data.loc[~spectrum_ix, 'isabl_sample_id']
+        spectrum_signature = pd.read_table(spectrum_signature_path)[['patient_id', 'consensus_signature']]
+        spectrum_signature.columns = columns
+        signatures = spectrum_signature
     return signatures
 
 @beartype
-def create_cohort_cn_data(cohort:str) -> pd.DataFrame:
+def get_excluded_cell_ids(h5ad:anndata.AnnData) -> pd.Series:
+    """ Return a bool Series of cells to exclude from selected h5 columns
+    """
+    excluded_cells = pd.Series(False, index=h5ad.obs.index)
+    for column in ['is_normal', 'is_s_phase_brks', 'is_chromothripsis_brks']:
+        cells = h5ad.obs[column].astype(bool)
+        excluded_cells |= cells
+    return excluded_cells
+
+@beartype
+def check_cn_sanity(cn:np.ndarray) -> tuple:
+    """ Return CN mean and a bool array indicating region has low nan fraction
+    """
+    cn_mean = np.nanmean(cn, axis=0)
+    nan_cnt = np.isnan(cn).sum(axis=0)
+    nan_frac = nan_cnt / cn.shape[0]
+    low_nan = nan_frac < 0.5
+    return cn_mean, low_nan
+
+@beartype
+def make_copy_per_bin_data(h5ad:anndata.AnnData) -> pd.DataFrame:
+    """ Return dataframe of DLP sample CN from h5 AnnData
+    """
+    excluded_cells = get_excluded_cell_ids(h5ad)
+    cn = h5ad.layers['copy']
+    cn = cn[~excluded_cells, :]
+    cn_mean, low_nan = check_cn_sanity(cn)
+
+    data = h5ad.var.copy() # regions
+    data['cn'] = cn_mean
+    data['is_valid'] = low_nan
+    # data.dropna(inplace=True)
+    
+    data = data.rename(columns={'chr':'chromosome'})
+    data['chromosome'] = pd.Categorical(data['chromosome'], chroms, ordered=True)
+    data.sort_values(by=['chromosome', 'start', 'end'], inplace=True)
+    data['isabl_patient_id'] = isabl_patient_id
+    data['start'] -= 1
+    data['length'] = data['end'] - data['start']
+    data.reset_index(drop=True, inplace=True)
+    
+    return data
+
+@beartype
+def create_cohort_cn_data(cohort:str, has_dlp=False) -> pd.DataFrame:
     """ Load get_cohort_cn cohort, filter, and return cohort CN dataframe
     """
-    cn_data = shahlabdata.wgs.get_cohort_cn(cohort, most_recent=True)
-    include_wgs_samples = get_include_wgs_samples(cohort)
-    if len(include_wgs_samples) > 0:
-        cn_data = cn_data[cn_data['isabl_aliquot_id'].isin(include_wgs_samples)]
-    isabl_aliquots = cn_data['isabl_aliquot_id'].unique()
-    qc_cn_data_and_samples(cn_data)
+    if not has_dlp:
+        cn_data = shahlabdata.wgs.get_cohort_cn(cohort, most_recent=True)
+        include_wgs_samples = get_include_wgs_samples(cohort)
+        if len(include_wgs_samples) > 0:
+            cn_data = cn_data[cn_data['isabl_aliquot_id'].isin(include_wgs_samples)]
+        isabl_aliquots = cn_data['isabl_aliquot_id'].unique()
+        qc_cn_data_and_samples(cn_data)
 
-    cn_data = select_histotype_and_project(cn_data, cohort)
-    cn_data = pd.concat([cn_data.assign(cohort=cohort)])
+        cn_data = select_histotype_and_project(cn_data, cohort)
+        cn_data = pd.concat([cn_data.assign(cohort=cohort)])
+    else:
+        cohort = 'SPECTRUM-DLP'
+        chroms = [str(c) for c in range(1, 22+1)] + ['X', 'Y']
+        cn_data = pd.DataFrame()
+        ploidy = {}
+        data_dir = '/juno/work/shah/users/chois7/spectrum/dlp/cn/signals'
+        h5_paths = glob.glob(f'{data_dir}/*.h5')
+        for h5_path in h5_paths:
+            isabl_patient_id = re.search(r"SPECTRUM-..-...", h5_path).group()
+            print(isabl_patient_id, file=sys.stderr)
+            h5ad = anndata.read_h5ad(h5_path)
+            data = make_copy_per_bin_data(h5ad)
+            data['cohort'] = cohort
+            data['isabl_sample_id'] = data['isabl_patient_id'] # ad hoc
+            cn_data = pd.concat([cn_data, data])
     return cn_data
 
 @beartype
@@ -580,12 +664,13 @@ def make_merged_cn_data(cohorts=['Metacohort', 'SPECTRUM']) -> tuple:
     saved = {
         'Metacohort': '/juno/work/shah/users/chois7/metacohort/wgs/cn/Metacohort.cn_data.tsv',
         'SPECTRUM': '/juno/work/shah/users/chois7/spectrum/wgs/cn/SPECTRUM.cn_data.tsv',
-        'merged': '/juno/work/shah/users/chois7/tickets/cohort-cn-qc/results/merged.cn_data.tsv'
+        'SPECTRUM-DLP': '/juno/work/shah/users/chois7/spectrum/dlp/cn/SPECTRUM.cn_data.tsv',
+        'merged': '/juno/work/shah/users/chois7/tickets/cohort-cn-qc/results/merged.cn_data.tsv',
     }
 
-    if cohorts.count('SPECTRUM DLP') > 0:
-        logging.info('data retrieval for SPECTRUM DLP not ready')
-        return pd.DataFrame()
+    has_dlp = cohorts.count('SPECTRUM-DLP') > 0
+    if has_dlp:
+        assert set(cohorts) == {'SPECTRUM-DLP'}, f'cohorts:{cohorts} should not include both WGS and DLP'
 
     if os.path.exists(saved['merged']):
         cn_data = pd.read_table(saved['merged'])
@@ -596,14 +681,14 @@ def make_merged_cn_data(cohorts=['Metacohort', 'SPECTRUM']) -> tuple:
                 cn_data = pd.read_table(saved[cohort])
                 logging.debug(f'{cohort} data retrieved: cohort.shape: {cn_data.shape}')
             else:
-                cn_data = create_cohort_cn_data(cohort)
+                cn_data = create_cohort_cn_data(cohort, has_dlp)
                 cn_data.to_csv(saved[cohort], sep='\t', index=False)
 
             cn_merged = pd.concat([cn_merged, cn_data])
         cn_data = cn_merged.copy()
-
-    ms_signatures = get_metacohort_spectrum_signatures(cn_data)
-    cn_data = cn_data.merge(ms_signatures)
+    
+    signature_table = get_signature_table(cn_data, has_dlp)
+    cn_data = cn_data.merge(signature_table)
     signatures = cn_data['signature'].unique()
     
     signature_counts = {}
@@ -617,8 +702,8 @@ def make_merged_cn_data(cohorts=['Metacohort', 'SPECTRUM']) -> tuple:
     for signature in signatures:
         logging.info(f'make signature cn_changes table: {signature}')
         signature_cn_data = cn_data[cn_data['signature']==signature]
-        cn_changes[signature] = get_cn_change(signature_cn_data, chroms)
-    cn_changes['merged'] = get_cn_change(cn_data, chroms)
+        cn_changes[signature] = get_cn_change(signature_cn_data, chroms, has_dlp)
+    cn_changes['merged'] = get_cn_change(cn_data, chroms, has_dlp)
     
     return cn_changes, signature_counts
 
@@ -791,6 +876,7 @@ class CopyNumberChangeData:
 
         self.gene_pos_table = make_gene_pos_table(self.gene_list)
         self.gene_ranges = get_gene_ranges(self.gene_list)
+
         self.cn_changes, self.signature_counts = make_merged_cn_data(self.cohorts)
         signatures_to_exclude = ['merged', 'HRD-Other']
         self.signatures = [s for s in self.signature_counts.keys() if s not in signatures_to_exclude]
