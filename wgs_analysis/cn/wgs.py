@@ -602,18 +602,20 @@ def make_merged_cn_data(cohorts=['Metacohort', 'SPECTRUM']) -> tuple:
             cn_merged = pd.concat([cn_merged, cn_data])
         cn_data = cn_merged.copy()
 
-    signatures = get_metacohort_spectrum_signatures(cn_data)
-    cn_data = cn_data.merge(signatures)
+    ms_signatures = get_metacohort_spectrum_signatures(cn_data)
+    cn_data = cn_data.merge(ms_signatures)
+    signatures = cn_data['signature'].unique()
+    
     signature_counts = {}
-    for signature in signatures['signature'].unique():
+    for signature in signatures:
+        logging.info(f'get signature counts: {signature}')
         signature_count = cn_data[cn_data['signature']==signature]['isabl_sample_id'].unique().shape[0]
         signature_counts[signature] = signature_count
     signature_counts['merged'] = cn_data['isabl_sample_id'].unique().shape[0]
 
     cn_changes = {}
-    signatures = cn_data['signature'].unique()
     for signature in signatures:
-        logging.info(f'signature: {signature}')
+        logging.info(f'make signature cn_changes table: {signature}')
         signature_cn_data = cn_data[cn_data['signature']==signature]
         cn_changes[signature] = get_cn_change(signature_cn_data, chroms)
     cn_changes['merged'] = get_cn_change(cn_data, chroms)
@@ -643,9 +645,9 @@ def evaluate_enrichment(signatures:Iterable, signature_counts:dict,
                 results.loc[ix] = row
                 ix += 1
     pvalues = results['p']
-    multipletesting = multitest.multipletests(fet['pvalue'], method='fdr_bh', alpha=padj_cutoff)
-    accepts = multipletesting[0]
-    padjs = multipletesting[1]
+    multipletesting = multitest.multipletests(pvalues, method='fdr_bh', alpha=padj_cutoff)
+    accepts = multipletesting[0] # True if below p.adj < alpha
+    padjs = multipletesting[1] # adjusted p values
     results['p.adj'] = padjs
     results['significant'] = accepts
     return results
@@ -802,11 +804,11 @@ class CopyNumberChangeData:
     def get_gene_cn_counts(self):
         gene_cn = {'gain':defaultdict(dict), 'loss':defaultdict(dict)}
         for signature in self.signatures:
+            cn_df = self.cn_changes[signature].copy()
             for gene, (chrom, start, end) in self.gene_ranges.items():
-                df = self.cn_changes[signature].copy()
                 start_bin = (start // self.bin_size) * self.bin_size
                 end_bin = (end // self.bin_size) * self.bin_size
-                df = df[df['chromosome']==chrom]
+                df = cn_df[cn_df['chromosome']==chrom] # gene region cn
                 df = df[(df['start'] == start_bin) | (df['end'] == end_bin)]
                 if df.shape[0] > 0:
                     start_dist = abs(start - start_bin)
@@ -916,7 +918,7 @@ for cohorts in (['SPECTRUM'], ['Metacohort'], ['SPECTRUM', 'Metacohort']):
             cn.plot_pan_chrom_cn(group=signature, out_path=f'{cohort_symbol}.{signature}.pdf')
             cn.plot_per_chrom_cn(group=signature, out_path=f'{cohort_symbol}.{signature}.per-chrom.pdf')
 
-gene_cn = cn.get_gene_cn_counts()
-results = evaluate_enrichment(cn.signatures, cn.signature_counts, cn.gene_list, 
-        cn.sample_counts, padj_cutoff=0.1)
-results.to_csv('fet.tsv', sep='\t', index=False)
+    gene_cn = cn.get_gene_cn_counts()
+    results = evaluate_enrichment(cn.signatures, cn.signature_counts, cn.gene_list, 
+            cn.sample_counts, padj_cutoff=0.1)
+    results.to_csv(f'enrichment.{cohort_symbol}.tsv', sep='\t', index=False)
