@@ -7,9 +7,7 @@ for cohorts in (['SPECTRUM'], ['Metacohort'], ['SPECTRUM', 'Metacohort']):
     cn = CopyNumberChangeData(gene_list=gene_list_path, cohorts=cohorts)
     cohort_symbol = '_'.join(cn.cohorts)
     for signature in cn.signature_counts:
-        logging.info(f'processing cohorts:{cohorts} signature:{signature}')
         if cn.signature_counts[signature] > 5:
-            logging.info(f'plotting cohorts:{cohorts} signature:{signature}')
             cn.plot_pan_chrom_cn(group=signature, out_path=f'{cohort_symbol}.{signature}.pdf')
             cn.plot_per_chrom_cn(group=signature, out_path=f'{cohort_symbol}.{signature}.per-chrom.pdf')
 ```
