@@ -669,7 +669,6 @@ class CopyNumberChangeData:
         cohort_symbol = ' + '.join(self.cohorts)
         plot_title = f'{cohort_symbol} (n={self.sample_counts})'
         
-
 # logging.basicConfig(level = logging.INFO)
 # gene_list_path = '/juno/work/shah/users/chois7/tickets/cohort-cn-qc/resources/gene_list.txt'
 # for cohorts in (['SPECTRUM'], ['Metacohort'], ['SPECTRUM', 'Metacohort']):
