@@ -635,8 +635,10 @@ class CopyNumberChangeData:
         #self.out_path = 
 
     def plot_pan_chrom_cn(self, group='merged', out_path=None):
-        cohort_symbol = ' + '.join(self.cohorts)
-        plot_title = f'{cohort_symbol} (n={self.sample_counts})'
+        cohorts_tag = ' + '.join(self.cohorts)
+        counts = signature_counts[group]
+        counts_tag = f'n={counts}' if counts==self.sample_counts else f'n={counts}/{sample_counts}'
+        plot_title = f'{cohorts_tag} (n={counts_tag})'
         with matplotlib.rc_context({'font.family':'Arial', 'font.size': 15}):
             # Draw GISTIC summary plot
             plot_data = self.cn_changes[group]
