@@ -22,7 +22,7 @@ for signature in cn.signature_counts:
 ## Fisher's exact test for CN enrichment in signatures
 ```python
 gene_cn = cn.get_gene_cn_counts()
-results = evaluate_enrichment(cn.signatures, cn.signature_counts, cn.gene_list, 
-        cn.sample_counts, padj_cutoff=0.1)
+results = cn_utils.evaluate_enrichment(cn.signatures, cn.signature_counts, 
+    cn.gene_list, cn.sample_counts, padj_cutoff=0.05)
 results.to_csv(f'enrichment.{cohort_symbol}.tsv', sep='\t', index=False)
 ```
