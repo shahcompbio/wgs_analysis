@@ -19,6 +19,7 @@ import anndata
 from beartype import beartype
 from fisher import pvalue 
 from statsmodels.stats import multitest
+from scipy.signal import find_peaks
 
 import wgs_analysis.refgenome
 import wgs_analysis.plots.cnv
@@ -54,6 +55,10 @@ def select_histotype_and_project(cn_data:pd.DataFrame, cohort:str) -> pd.DataFra
         labels = labels[labels['histotype'].notnull()]
         labels = labels[labels['cohort'] != 'APOLLO']
         cn_data = cn_data.merge(labels[['isabl_sample_id']].drop_duplicates())
+    elif cohort == 'APOLLO-H':
+        whole_tumor = cn_data['isabl_sample_id'].str.slice(0,3).map({'ADT':False, 'ADH':True})
+        cn_data = cn_data[whole_tumor] # same with all other WGS samples
+
     return cn_data
 
 @beartype
@@ -561,6 +566,7 @@ def get_signature_table(cn_data:pd.DataFrame, has_dlp:bool) -> pd.DataFrame:
     if not has_dlp:
         spectrum_signature_path = '/juno/work/shah/users/chois7/spectrum/dlp/cn/mutational_signatures.tsv'
         metacohort_signature_path = '/juno/work/shah/users/chois7/metacohort/mmctm/resources/Tyler_2022_Nature_labels.isabl.tsv'
+        apollo_signature_path = ''
         spectrum_ix = cn_data['isabl_sample_id'].str.startswith('SPECTRUM')
         cn_data.loc[spectrum_ix, 'sample'] = cn_data.loc[spectrum_ix, 'isabl_sample_id'].str.slice(0, 15)
         cn_data.loc[~spectrum_ix, 'sample'] = cn_data.loc[~spectrum_ix, 'isabl_sample_id']
@@ -568,7 +574,9 @@ def get_signature_table(cn_data:pd.DataFrame, has_dlp:bool) -> pd.DataFrame:
         spectrum_signature.columns = columns
         metacohort_signature = pd.read_table(metacohort_signature_path)[['isabl_sample_id', 'stratum']]
         metacohort_signature.columns = columns
-        signatures = pd.concat([spectrum_signature, metacohort_signature])
+        apollo_signature = pd.read_table('/juno/work/shah/users/chois7/apollo/wgs/cn/signature_labels.tsv')
+        apollo_signature.columns = columns
+        signatures = pd.concat([spectrum_signature, metacohort_signature, apollo_signature])
     else:
         spectrum_signature_path = '/juno/work/shah/users/chois7/spectrum/dlp/cn/mutational_signatures.tsv'
         spectrum_ix = cn_data['isabl_sample_id'].str.startswith('SPECTRUM')
@@ -628,7 +636,8 @@ def create_cohort_cn_data(cohort:str, has_dlp=False) -> pd.DataFrame:
     """ Load get_cohort_cn cohort, filter, and return cohort CN dataframe
     """
     if not has_dlp:
-        cn_data = shahlabdata.wgs.get_cohort_cn(cohort, most_recent=True)
+        isabl_cohort = 'APOLLO' if cohort.startswith('APOLLO') else cohort
+        cn_data = shahlabdata.wgs.get_cohort_cn(isabl_cohort, most_recent=True)
         include_wgs_samples = get_include_wgs_samples(cohort)
         if len(include_wgs_samples) > 0:
             cn_data = cn_data[cn_data['isabl_aliquot_id'].isin(include_wgs_samples)]
@@ -646,7 +655,7 @@ def create_cohort_cn_data(cohort:str, has_dlp=False) -> pd.DataFrame:
         h5_paths = glob.glob(f'{data_dir}/*.h5')
         for h5_path in h5_paths:
             isabl_patient_id = re.search(r"SPECTRUM-..-...", h5_path).group()
-            print(isabl_patient_id, file=sys.stderr)
+            logging.info(f'create_cohort_cn_data: isabl_patient_id: {isabl_patient_id}')
             h5ad = anndata.read_h5ad(h5_path)
             data = make_copy_per_bin_data(h5ad)
             data['cohort'] = cohort
@@ -666,7 +675,8 @@ def make_merged_cn_data(cohorts=['Metacohort', 'SPECTRUM']) -> tuple:
         'Metacohort': '/juno/work/shah/users/chois7/metacohort/wgs/cn/Metacohort.cn_data.tsv',
         'SPECTRUM': '/juno/work/shah/users/chois7/spectrum/wgs/cn/SPECTRUM.cn_data.tsv',
         'SPECTRUM-DLP': '/juno/work/shah/users/chois7/spectrum/dlp/cn/SPECTRUM.cn_data.tsv',
-        'merged': '/juno/work/shah/users/chois7/tickets/cohort-cn-qc/results/merged.cn_data.tsv',
+        'APOLLO-H': '/juno/work/shah/users/chois7/apollo/wgs/cn/APOLLO-H.cn_data.tsv',
+        'merged': '/juno/work/shah/users/chois7/tickets/cohort-cn-qc/results/merged.cn_data.with_apollo.tsv',
     }
 
     has_dlp = cohorts.count('SPECTRUM-DLP') > 0
@@ -688,7 +698,7 @@ def make_merged_cn_data(cohorts=['Metacohort', 'SPECTRUM']) -> tuple:
             cn_merged = pd.concat([cn_merged, cn_data])
         cn_data = cn_merged.copy()
     
-    signature_table = get_signature_table(cn_data, has_dlp)
+    signature_table = get_signature_table(cn_data, has_dlp) # merged signature table
     cn_data = cn_data.merge(signature_table)
     signatures = cn_data['signature'].unique()
     
@@ -754,7 +764,7 @@ def get_ideogram_and_chroms(gene_ranges:dict, chroms:Iterable):
     gene_chroms = [gene_ranges[g][0] for g in gene_ranges]
     gene_chroms = [c for c in chroms if c in gene_chroms]
 
-    ideogram = ideogram[ideogram['chrom'].isin(gene_chroms)]
+    #ideogram = ideogram[ideogram['chrom'].isin(gene_chroms)]
     return ideogram, gene_chroms
 
 @beartype
@@ -858,6 +868,71 @@ def proc_cn_changes(df:pd.DataFrame) -> pd.DataFrame:
         df.loc[rix, 'group'] = group
     return df
 
+def merge_intervals(intervals):
+    # Sort the array on the basis of start values of intervals.
+    intervals.sort()
+    stack = []
+    if len(intervals) > 0:
+        # insert first interval into stack
+        stack.append(intervals[0])
+        for i in intervals[1:]:
+            # Check for overlapping interval,
+            # if interval overlap
+            if stack[-1][0] <= i[0] <= stack[-1][-1]:
+                stack[-1][-1] = max(stack[-1][-1], i[-1])
+            else:
+                stack.append(i)
+    return stack
+
+def get_peak_regions(peaks, vals, threshold=0.05, max_width=500, min_cn_cutoff=0.2):
+    peak_ix = None
+    peak_regions = []
+    for peak in peaks:
+        # print(f'peak: {peak}')
+        peak_ix = peak
+        peak_range = []
+        
+        prev_val = vals[peak]
+        for ix in range(peak, max(0, peak-max_width), -1):
+            val = vals[ix]
+            if (abs(val - prev_val) < threshold) and (val >= min_cn_cutoff):
+                # print(f'right: {ix}, {val}, {prev_val}, {abs(val - prev_val)}')
+                peak_range.append(ix)
+                prev_val = val
+            else:
+                break
+                
+        prev_val = vals[peak]
+        for ix in range(peak + 1, min(len(vals), peak+max_width), 1):
+            val = vals[ix]
+            if (abs(val - prev_val) < threshold) and (val >= min_cn_cutoff):
+                peak_range.append(ix)
+                # print(f'right: {ix}, {val}, {prev_val}, {abs(val - prev_val)}')
+                prev_val = val
+            else:
+                break
+                
+        if len(peak_range) == 1:
+            peak_region = [min(peak_range), max(peak_range) + 1]
+        elif len(peak_range) > 1:
+            peak_region = [min(peak_range), max(peak_range)]
+        else: continue
+        peak_regions.append(peak_region)
+        # print(f'peak_region: {peak_region}')
+    # print(peak_regions)
+    merged_regions = merge_intervals(peak_regions)
+    return merged_regions
+
+def get_region_coords(cn_regions, df):
+    items = {}
+    for start, end in cn_regions:
+        region_df = df.loc[np.arange(start, end)]
+        region_chr = str(region_df['chromosome'].unique().squeeze())
+        region_start = int(region_df['start'].iloc[0])
+        region_end = int(region_df['end'].iloc[-1])
+        region_coord = f'{region_chr}:{region_start}-{region_end}'
+        items[region_coord] = (region_chr, region_start, region_end)
+    return items
 
 class CopyNumberChangeData:
     def __init__(self, cohorts=['Metacohort', 'SPECTRUM'], gene_list=None,
@@ -881,6 +956,9 @@ class CopyNumberChangeData:
         self.cn_changes, self.signature_counts = make_merged_cn_data(self.cohorts)
         signatures_to_exclude = ['merged', 'HRD-Other']
         self.signatures = [s for s in self.signature_counts.keys() if s not in signatures_to_exclude]
+        for signature in self.signatures:
+            self.gene_ranges.update(self.get_peak_coords(signature))
+
         self.sample_counts = self.signature_counts['merged']
         self.centromere_table = get_chromosome_gap_band_data()
         self.arms = get_chrom_arm_coords(self.centromere_table)
@@ -907,6 +985,26 @@ class CopyNumberChangeData:
                 gene_cn['gain'][signature][gene] = int(df['gain'])
                 gene_cn['loss'][signature][gene] = int(df['loss'])
         return gene_cn
+
+    def get_peak_coords(self, signature, prominence=0.5, min_cn_cutoff=0.65):
+        _cn = self.cn_changes[signature]
+        peak_coords = {}
+        for ix, chrom in enumerate(self.chroms):
+            df = _cn[_cn['chromosome']==chrom].reset_index()
+            gains = df['norm_gain']
+            smooth_gains = gains.ewm(alpha=0.5).mean().values.flatten()
+            losses = df['norm_loss']
+            smooth_losses = losses.ewm(alpha=0.5).mean().values.flatten()
+            peaks, _ = find_peaks(gains, prominence=prominence, width=[5, 1000])
+            troughs, _ = find_peaks(losses, prominence=prominence, width=[5, 1000])
+            gain_regions = get_peak_regions(peaks, smooth_gains, 
+                threshold=0.03, max_width=50, min_cn_cutoff=min_cn_cutoff)
+            loss_regions = get_peak_regions(troughs, smooth_losses, 
+                threshold=0.03, max_width=50, min_cn_cutoff=min_cn_cutoff)
+            peak_coords.update(get_region_coords(gain_regions, df))
+            peak_coords.update(get_region_coords(loss_regions, df))
+            
+        return peak_coords
 
     def plot_pan_chrom_cn(self, group='merged', out_path=None):
         cohorts_tag = ' + '.join(self.cohorts)
@@ -953,7 +1051,8 @@ class CopyNumberChangeData:
         counts = self.signature_counts[group]
         counts_tag = f'n={counts}' if counts==self.sample_counts else f'n={counts}/{self.sample_counts}'
         plot_title = f'{cohorts_tag} ({counts_tag})'
-        nrows, ncols = get_nrow_ncol(gene_chroms)
+        #nrows, ncols = get_nrow_ncol(gene_chroms)
+        nrows, ncols = get_nrow_ncol(self.chroms)
         fig = plt.figure(figsize=(15, 3*nrows))
         fig.suptitle(f'{plot_title}\n', fontsize=16, fontproperties=self.fontprop)
         n_subplots = nrows * ncols
@@ -963,10 +1062,12 @@ class CopyNumberChangeData:
         bin_size = self.bin_size
         factor = self.factor
 
-        for ix, chrom in enumerate(gene_chroms):
+        #for ix, chrom in enumerate(gene_chroms):
+        for ix, chrom in enumerate(self.chroms):
             chrom_df = df[df['chromosome']==chrom]
             ax = axes[ix]
             set_axis_style(ax, chrom, self.fontprop)
+            ax.set_aspect(aspect=60) # 1 y-val is x60 length of 1 x-val
             
             # make p arm patch
             p_arm = make_p_arm_rectangle(chrom, arms)
@@ -994,19 +1095,22 @@ class CopyNumberChangeData:
             plt.savefig(out_path)
 
         
-#logging.basicConfig(level = logging.INFO)
-#gene_list_path = '/juno/work/shah/users/chois7/tickets/cohort-cn-qc/resources/gene_list.txt'
-#for cohorts in (['SPECTRUM'], ['Metacohort'], ['SPECTRUM', 'Metacohort']):
-#    cn = CopyNumberChangeData(gene_list=gene_list_path, cohorts=cohorts)
-#    cohort_symbol = '_'.join(cn.cohorts)
-#    for signature in cn.signature_counts:
-#        logging.info(f'processing cohorts:{cohorts} signature:{signature}')
-#        if cn.signature_counts[signature] > 5:
-#            logging.info(f'plotting cohorts:{cohorts} signature:{signature}')
-#            cn.plot_pan_chrom_cn(group=signature, out_path=f'{cohort_symbol}.{signature}.pdf')
-#            cn.plot_per_chrom_cn(group=signature, out_path=f'{cohort_symbol}.{signature}.per-chrom.pdf')
-#
-#    gene_cn = cn.get_gene_cn_counts()
-#    results = evaluate_enrichment(cn.signatures, cn.signature_counts, cn.gene_list, 
-#            cn.sample_counts, padj_cutoff=0.1)
-#    results.to_csv(f'enrichment.{cohort_symbol}.tsv', sep='\t', index=False)
+logging.basicConfig(level = logging.INFO)
+gene_list_path = '/juno/work/shah/users/chois7/tickets/cohort-cn-qc/resources/gene_list.txt'
+#for cohorts in (['SPECTRUM'], ['Metacohort'], ['APOLLO-H'], ['SPECTRUM', 'Metacohort', 'APOLLO-H']):
+#for cohorts in (['SPECTRUM', 'Metacohort', 'APOLLO-H'],):
+for cohorts in [['SPECTRUM-DLP']]:
+    cn = CopyNumberChangeData(gene_list=gene_list_path, cohorts=cohorts)
+    cohort_symbol = '_'.join(cn.cohorts)
+    for signature in cn.signature_counts:
+        logging.info(f'processing cohorts:{cohorts} signature:{signature}')
+        if cn.signature_counts[signature] > 5:
+            logging.info(f'plotting cohorts:{cohorts} signature:{signature}')
+            cn.plot_pan_chrom_cn(group=signature, out_path=f'{cohort_symbol}.{signature}.pdf')
+            cn.plot_per_chrom_cn(group=signature, out_path=f'{cohort_symbol}.{signature}.per-chrom.pdf')
+    
+    if cohorts != [['SPECTRUM-DLP']]:
+        gene_cn = cn.get_gene_cn_counts()
+        results = evaluate_enrichment(cn.signatures, cn.signature_counts, cn.gene_ranges.keys(), 
+                cn.sample_counts, padj_cutoff=0.1)
+        results.to_csv(f'enrichment.{cohort_symbol}.tsv', sep='\t', index=False)
