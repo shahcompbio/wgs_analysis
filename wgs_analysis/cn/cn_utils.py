@@ -709,12 +709,23 @@ def make_merged_cn_data(cohorts=['Metacohort', 'SPECTRUM']) -> tuple:
         signature_counts[signature] = signature_count
     signature_counts['merged'] = cn_data['isabl_sample_id'].unique().shape[0]
 
+    cn_changes_dir = 'cn_changes'
+    cohorts_tag = '_'.join(cohorts)
+    cn_changes_path = {signature: f'{cn_changes_dir}/{cohorts_tag}.{signature}.cn_change.tsv'
+        for signature in signature_counts.keys()}
     cn_changes = {}
-    for signature in signatures:
-        logging.info(f'make signature cn_changes table: {signature}')
-        signature_cn_data = cn_data[cn_data['signature']==signature]
-        cn_changes[signature] = get_cn_change(signature_cn_data, chroms, has_dlp)
-    cn_changes['merged'] = get_cn_change(cn_data, chroms, has_dlp)
+    for signature in signature_counts.keys():
+        if not os.path.exists(cn_changes_path[signature]):
+            logging.info(f'make signature cn_changes table: {signature}')
+            if signature == 'merged':
+                cn_changes['merged'] = get_cn_change(cn_data, chroms, has_dlp)
+            else:
+                signature_cn_data = cn_data[cn_data['signature']==signature]
+                cn_changes[signature] = get_cn_change(signature_cn_data, chroms, has_dlp)
+            cn_changes[signature].to_csv(cn_changes_path[signature], sep='\t', index=False)
+        else: # exists
+            logging.info(f'load signature cn_changes table: {signature}')
+            cn_changes[signature] = pd.read_table(cn_changes_path[signature])
     
     return cn_changes, signature_counts
 
@@ -868,8 +879,9 @@ def proc_cn_changes(df:pd.DataFrame) -> pd.DataFrame:
         df.loc[rix, 'group'] = group
     return df
 
-def merge_intervals(intervals):
-    # Sort the array on the basis of start values of intervals.
+def merge_intervals(intervals:Iterable) -> list:
+    """ For a list of lists, return merged list based on [start, end)
+    """
     intervals.sort()
     stack = []
     if len(intervals) > 0:
@@ -934,6 +946,24 @@ def get_region_coords(cn_regions, df):
         items[region_coord] = (region_chr, region_start, region_end)
     return items
 
+def merge_peaks_troughs(peaks_troughs:dict, chroms:Iterable):
+    """ For 'coord' -> (chrom, start, end) dict, return merged dict
+    """
+    merged = {}
+    for chrom in chroms:
+        chrom_regions = {}
+        chrom_pts = [[value[1], value[2]] for (key, value) in peaks_troughs.items()
+            if value[0] == chrom]
+        chrom_pts.sort()
+        logging.debug(f'[{chrom}] chrom_pts: \n{chrom_pts}')
+        if len(chrom_pts) > 0:
+            chrom_merged_start_ends = merge_intervals(chrom_pts)
+            logging.debug(f'[{chrom}] chrom_merged_start_ends: \n{chrom_merged_start_ends}')
+            chrom_regions = {f'{chrom}:{start}-{end}': (chrom, start, end) 
+                for (start, end) in chrom_merged_start_ends}
+        merged.update(chrom_regions)
+    return merged
+
 class CopyNumberChangeData:
     def __init__(self, cohorts=['Metacohort', 'SPECTRUM'], gene_list=None,
             bin_size=500000, factor=1000000):
@@ -956,8 +986,11 @@ class CopyNumberChangeData:
         self.cn_changes, self.signature_counts = make_merged_cn_data(self.cohorts)
         signatures_to_exclude = ['merged', 'HRD-Other']
         self.signatures = [s for s in self.signature_counts.keys() if s not in signatures_to_exclude]
+        self.peaks_troughs = {}
         for signature in self.signatures:
-            self.gene_ranges.update(self.get_peak_coords(signature))
+            self.peaks_troughs.update(self.get_peak_coords(signature))
+        self.peaks_troughs = merge_peaks_troughs(self.peaks_troughs, self.chroms)
+        self.gene_ranges.update(self.peaks_troughs)
 
         self.sample_counts = self.signature_counts['merged']
         self.centromere_table = get_chromosome_gap_band_data()
@@ -1095,11 +1128,11 @@ class CopyNumberChangeData:
             plt.savefig(out_path)
 
         
-logging.basicConfig(level = logging.INFO)
+logging.basicConfig(level = logging.DEBUG)
 gene_list_path = '/juno/work/shah/users/chois7/tickets/cohort-cn-qc/resources/gene_list.txt'
-#for cohorts in (['SPECTRUM'], ['Metacohort'], ['APOLLO-H'], ['SPECTRUM', 'Metacohort', 'APOLLO-H']):
+for cohorts in (['SPECTRUM'], ['Metacohort'], ['APOLLO-H'], ['SPECTRUM', 'Metacohort', 'APOLLO-H']):
 #for cohorts in (['SPECTRUM', 'Metacohort', 'APOLLO-H'],):
-for cohorts in [['SPECTRUM-DLP']]:
+#for cohorts in [['SPECTRUM-DLP']]:
     cn = CopyNumberChangeData(gene_list=gene_list_path, cohorts=cohorts)
     cohort_symbol = '_'.join(cn.cohorts)
     for signature in cn.signature_counts:
