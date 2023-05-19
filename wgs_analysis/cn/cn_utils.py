@@ -1,3 +1,4 @@
+import re
 import os
 import sys
 import gzip
@@ -12,6 +13,7 @@ import matplotlib.pyplot as plt
 import matplotlib.ticker as mtick
 import matplotlib.font_manager as font_manager
 from matplotlib.collections import BrokenBarHCollection
+from matplotlib.colors import ListedColormap
 import pandas as pd
 import numpy as np
 import pyranges as pr
@@ -20,6 +22,8 @@ from beartype import beartype
 from fisher import pvalue 
 from statsmodels.stats import multitest
 from scipy.signal import find_peaks
+from adjustText import adjust_text
+from liftover import get_lifter
 
 import wgs_analysis.refgenome
 import wgs_analysis.plots.cnv
@@ -336,17 +340,14 @@ def get_norm_values_and_color(df:pd.DataFrame, chrom:str, pos:int, bin_size=5000
 def plot_cnv_segments(ax:matplotlib.axes.Axes, cnv:pd.DataFrame, 
         column:str, segment_color:tuple, fill=False) -> None:
     """ Plot raw copy number as line plots
-
     Args:
         ax (matplotlib.axes.Axes): plot axes
         cnv (pandas.DataFrame): cnv table
         column (str): name of copies column
         segment_color: color of the segments
-
     Plot copy number as line plots.  The columns 'start' and 'end'
     are expected and should be adjusted for full genome plots.  Values from the
     'column' columns are plotted.
-
     """ 
 
     cnv = cnv.sort_values('start')
@@ -367,11 +368,9 @@ def plot_cnv_genome(ax:matplotlib.axes.Axes, cnv:pd.DataFrame, chroms:list,
         scatter=False, squashy=False) -> None:
     """
     Plot major/minor copy number across the genome
-
     Args:
         ax (matplotlib.axes.Axes): plot axes
         col (str): name of column to use
-
     """
 
     cnv = cnv.copy()
@@ -879,6 +878,7 @@ def proc_cn_changes(df:pd.DataFrame) -> pd.DataFrame:
         df.loc[rix, 'group'] = group
     return df
 
+@beartype
 def merge_intervals(intervals:Iterable) -> list:
     """ For a list of lists, return merged list based on [start, end)
     """
@@ -897,6 +897,8 @@ def merge_intervals(intervals:Iterable) -> list:
     return stack
 
 def get_peak_regions(peaks, vals, threshold=0.05, max_width=500, min_cn_cutoff=0.2):
+    """ Scan near peaks and define regions near peaks, including pleateaus
+    """
     peak_ix = None
     peak_regions = []
     for peak in peaks:
@@ -955,8 +957,7 @@ def merge_peaks_troughs(peaks_troughs:dict, chroms:Iterable):
         chrom_pts = [[value[1], value[2]] for (key, value) in peaks_troughs.items()
             if value[0] == chrom]
         chrom_pts.sort()
-        logging.debug(f'[{chrom}] chrom_pts: \n{chrom_pts}')
-        if len(chrom_pts) > 0:
+        logging.debug(f'[{chrom}] chrom_pts: \n{chrom_pts}')        if len(chrom_pts) > 0:
             chrom_merged_start_ends = merge_intervals(chrom_pts)
             logging.debug(f'[{chrom}] chrom_merged_start_ends: \n{chrom_merged_start_ends}')
             chrom_regions = {f'{chrom}:{start}-{end}': (chrom, start, end) 
@@ -964,9 +965,51 @@ def merge_peaks_troughs(peaks_troughs:dict, chroms:Iterable):
         merged.update(chrom_regions)
     return merged
 
+def parse_cancer_gene_census(cgc_path):
+    cgc = pd.read_table(cgc_path)
+    cgc.rename(columns={'Genome Location': 'GRCh38 Location'}, inplace=True)
+    src_cols = list(cgc.columns)
+    cgc['GRCh37 Location'] = np.nan
+    dst_cols = src_cols[:3] + ['GRCh37 Location'] + src_cols[3:]
+    cgc = cgc[dst_cols]
+    return cgc
+
+def annotate_hg19(cgc):
+    converter = get_lifter('hg38', 'hg19')
+    chroms = [str(c) for c in range(1, 22+1)] + ['X', 'Y']
+    hg38_coords = cgc['GRCh38 Location']
+    hg38_coords_df = hg38_coords.str.extract(r'(.+?):(\d+)-(\d+)')
+    hg38_coords_df.columns = ['chrom', 'start', 'end']
+    hg38_coords_df['GRCh37 Location'] = np.nan
+    hg19_coords = []
+    for rix, row in hg38_coords_df.iterrows():
+        chrom = row['chrom']
+        if chrom not in chroms: continue    
+        start = int(row['start'])
+        end = int(row['end'])
+        hg19_coord_start = converter[chrom][start]
+        if len(hg19_coord_start) != 1: continue
+        hg19_coord_end = converter[chrom][end]
+        if len(hg19_coord_end) != 1: continue
+        hg19_chrom, hg19_start, _ = hg19_coord_start[0]
+        hg19_chrom, hg19_end, _ = hg19_coord_end[0]
+        hg19_coord = f'{hg19_chrom.replace("chr", "")}:{hg19_start}-{hg19_end}'
+        hg38_coords_df.loc[rix, 'GRCh37 Location'] = hg19_coord
+    cgc['GRCh37 Location'] = hg38_coords_df['GRCh37 Location']
+    return cgc
+
+def get_cancer_gene_census_table(liftover_hg38_to_hg19=True):
+    cgc_path = '/juno/work/shah/users/chois7/datasets/gene_set/cancer_gene_census.tsv'
+    cgc = parse_cancer_gene_census(cgc_path)
+    if liftover_hg38_to_hg19:
+        cgc = annotate_hg19(cgc)
+        cgc = cgc[cgc['GRCh37 Location'].notnull()]
+    return cgc
+
+
 class CopyNumberChangeData:
     def __init__(self, cohorts=['Metacohort', 'SPECTRUM'], gene_list=None,
-            bin_size=500000, factor=1000000):
+            bin_size=500000, factor=1000000, update_regions=False):
         self.cohorts = cohorts
         self.fontprop, self.italic_fontprop = get_arial_fonts()
         self.chroms = wgs_analysis.refgenome.info.chromosomes[:-1]
@@ -986,18 +1029,57 @@ class CopyNumberChangeData:
         self.cn_changes, self.signature_counts = make_merged_cn_data(self.cohorts)
         signatures_to_exclude = ['merged', 'HRD-Other']
         self.signatures = [s for s in self.signature_counts.keys() if s not in signatures_to_exclude]
+        self.peak_params = self.get_peak_params()
         self.peaks_troughs = {}
         for signature in self.signatures:
             self.peaks_troughs.update(self.get_peak_coords(signature))
+        self.src_peaks_troughs = self.peaks_troughs
         self.peaks_troughs = merge_peaks_troughs(self.peaks_troughs, self.chroms)
-        self.gene_ranges.update(self.peaks_troughs)
+        if update_regions: self.gene_ranges.update(self.peaks_troughs)
 
         self.sample_counts = self.signature_counts['merged']
         self.centromere_table = get_chromosome_gap_band_data()
         self.arms = get_chrom_arm_coords(self.centromere_table)
         self.bin_size = bin_size
-        self.factor = factor
-        #self.out_path = 
+        self.factor = factor  
+
+    def get_peak_params(self):
+        peak_params = {
+            ('SPECTRUM-DLP',): { # pass v1
+                'FBI': [0.5, 0.6, 0.08],
+                'HRD-Dup': [0.5, 0.6, 0.1],
+                'HRD-Del': [0.5, 0.6, 0.1],
+                'Undetermined': [0.5, 2, 0.01],
+            },
+            ('SPECTRUM',): {
+                'FBI': [0.5, 0.6, 0.08],
+                'HRD-Dup': [0.5, 0.6, 0.1],
+                'HRD-Del': [0.5, 0.6, 0.1],
+                'Undetermined': [0.5, 2, 0.01],
+            },
+            ('Metacohort',): {
+                'FBI': [0.5, 0.65, 0.05],
+                'HRD-Dup': [0.5, 0.65, 0.05],
+                'HRD-Del': [0.5, 0.65, 0.05],
+                'TD': [0.5, 0.65, 0.08],
+                'Undetermined': [0.5, 2, 0.01],
+            },
+            ('APOLLO-H',): {
+                'FBI': [0.5, 0.65, 0.05],
+                'HRD-Dup': [0.5, 0.65, 0.05],
+                'HRD-Del': [0.5, 0.65, 0.05],
+                'TD': [0.5, 0.65, 0.08],
+                'Undetermined': [0.5, 2, 0.01],
+            },
+            ('SPECTRUM', 'Metacohort', 'APOLLO-H'): {
+                'FBI': [0.5, 0.6, 0.03],
+                'HRD-Dup': [0.5, 0.6, 0.03],
+                'HRD-Del': [0.5, 0.6, 0.03],
+                'TD': [0.5, 0.6, 0.03],
+                'Undetermined': [0.5, 2, 0.01],
+            }
+        }
+        return peak_params
 
     def get_gene_cn_counts(self):
         gene_cn = {'gain':defaultdict(dict), 'loss':defaultdict(dict)}
@@ -1019,7 +1101,10 @@ class CopyNumberChangeData:
                 gene_cn['loss'][signature][gene] = int(df['loss'])
         return gene_cn
 
-    def get_peak_coords(self, signature, prominence=0.5, min_cn_cutoff=0.65):
+    def get_peak_coords(self, signature):
+        prominence, min_cn_cutoff, threshold = 0.65, 0.5, 0.03
+        if signature in self.peak_params[tuple(self.cohorts)]:
+            prominence, min_cn_cutoff, threshold = self.peak_params[tuple(self.cohorts)][signature]
         _cn = self.cn_changes[signature]
         peak_coords = {}
         for ix, chrom in enumerate(self.chroms):
@@ -1027,13 +1112,13 @@ class CopyNumberChangeData:
             gains = df['norm_gain']
             smooth_gains = gains.ewm(alpha=0.5).mean().values.flatten()
             losses = df['norm_loss']
-            smooth_losses = losses.ewm(alpha=0.5).mean().values.flatten()
+            smooth_losses = losses.ewm(alpha=0.5).mean().values.flatten() 
             peaks, _ = find_peaks(gains, prominence=prominence, width=[5, 1000])
             troughs, _ = find_peaks(losses, prominence=prominence, width=[5, 1000])
             gain_regions = get_peak_regions(peaks, smooth_gains, 
-                threshold=0.03, max_width=50, min_cn_cutoff=min_cn_cutoff)
+                threshold=threshold, max_width=50, min_cn_cutoff=min_cn_cutoff)
             loss_regions = get_peak_regions(troughs, smooth_losses, 
-                threshold=0.03, max_width=50, min_cn_cutoff=min_cn_cutoff)
+                threshold=threshold, max_width=50, min_cn_cutoff=min_cn_cutoff)
             peak_coords.update(get_region_coords(gain_regions, df))
             peak_coords.update(get_region_coords(loss_regions, df))
             
@@ -1127,23 +1212,144 @@ class CopyNumberChangeData:
         if out_path:
             plt.savefig(out_path)
 
+def plot_peaks_troughs(cn, peak_params:dict, plot_dir='pt_plots'):
+                       #, prominence=0.5, min_cn_cutoff=0.65):
+    """ Plot peaks and troughs for peak/trough detection QC
+    """
+    signatures = cn.signatures
+    nrow, ncol = 8, 3
+    for signature in signatures:
+        _cn = cn.cn_changes[signature]
+        prominence, min_cn_cutoff, threshold = 0.65, 0.5, 0.03
+        if signature in peak_params[tuple(cn.cohorts)]:
+            prominence, min_cn_cutoff, threshold = peak_params[tuple(cn.cohorts)][signature]
+
+        # fig, axes = plt.subplots(len(cn.chroms))
+        fig, axes = plt.subplots(nrow, ncol)
+        fig.set_figheight(30)
+        fig.set_figwidth(20)
+
+        peak_coords = {}
+        for ix, chrom in enumerate(cn.chroms):
+            xix = ix % ncol
+            yix = ix // ncol
+            ax = axes[yix][xix]
+            df = _cn[_cn['chromosome']==chrom].reset_index()
+            gains = df['norm_gain']
+            smooth_gains = gains.ewm(alpha=0.5).mean().values.flatten()
+            losses = df['norm_loss']
+            smooth_losses = losses.ewm(alpha=0.5).mean().values.flatten()
+            peaks, _ = find_peaks(gains, prominence=prominence, width=[5, 1000])
+            troughs, _ = find_peaks(losses, prominence=prominence, width=[5, 1000])
+            gain_regions = get_peak_regions(peaks, smooth_gains, 
+                threshold=threshold, max_width=50, min_cn_cutoff=min_cn_cutoff)
+            loss_regions = get_peak_regions(troughs, smooth_losses, 
+                threshold=threshold, max_width=50, min_cn_cutoff=min_cn_cutoff)
+            peak_coords.update(get_region_coords(gain_regions, df))
+            peak_coords.update(get_region_coords(loss_regions, df))
+
+            losses = -losses
+            smooth_losses = -smooth_losses
+
+            # plot regions
+            ax.set_title(f'chr{chrom}')
+            ax.plot(gains, alpha=0.6)
+            ax.plot(smooth_gains)
+            ax.plot(losses, alpha=0.6)
+            ax.plot(smooth_losses)
+            ax.plot(peaks, gains[peaks], "^", alpha=0.7)
+            ax.plot(troughs, losses[troughs], "v", alpha=0.7)
+            for gain_start, gain_end in gain_regions:
+                ax.fill_between(np.arange(gain_start, gain_end), gains[gain_start:gain_end], 0, color='pink')
+            for loss_start, loss_end in loss_regions:
+                ax.fill_between(np.arange(loss_start, loss_end), losses[loss_start:loss_end], 0, color='lightblue')
+            ax.set_ylim((-1, 1))
+            # if chrom == '19': break
+            cohorts_tag = '_'.join(cohorts)
+        png_path = f'{plot_dir}/{cohorts_tag}.{signature}.png'
+        plt.tight_layout()
+        plt.savefig(png_path)
+
+def plot_merged_peaks_troughs(peaks_troughs, plot_dir='pt_plots'):
+    """ Plot merged peaks and troughs for peak/trough detection QC
+    """
+    nrow, ncol = 8, 3
+    _cn = cn.cn_changes['merged']
+
+    # fig, axes = plt.subplots(len(cn.chroms))
+    fig, axes = plt.subplots(nrow, ncol)
+    fig.set_figheight(30)
+    fig.set_figwidth(20)
+
+    for ix, chrom in enumerate(cn.chroms):
+        chrom_pts = [(peaks_troughs[p][1], peaks_troughs[p][2]) 
+                     for p in peaks_troughs if p.startswith(f'{chrom}:')]
+        logging.debug(f'chrom_pts (chrom {chrom}: {chrom_pts}')
+        xix = ix % ncol
+        yix = ix // ncol
+        ax = axes[yix][xix]
+        df = _cn[_cn['chromosome']==chrom].reset_index()
+        gains = df['norm_gain']
+        smooth_gains = gains.ewm(alpha=0.5).mean().values.flatten()
+        losses = df['norm_loss']
+        smooth_losses = losses.ewm(alpha=0.5).mean().values.flatten()
+
+        losses = -losses
+        smooth_losses = -smooth_losses
+
+        # plot regions
+        ax.set_title(f'chr{chrom}')
+        ax.plot(gains, alpha=0.6)
+        ax.plot(smooth_gains)
+        ax.plot(losses, alpha=0.6)
+        ax.plot(smooth_losses)
+        for start, end in chrom_pts:
+            start = int(start // 500000)
+            end = int(end // 500000)
+            region_gain_sum = abs(sum(gains[start:end]))
+            region_loss_sum = abs(sum(losses[start:end]))
+            logging.debug(f'region_gain_sum ({start}:{end}): {region_gain_sum}')
+            logging.debug(f'region_loss_sum ({start}:{end}): {region_loss_sum}')
+            if region_gain_sum > region_loss_sum:
+                ax.fill_between(np.arange(start, end), 1, 0, color='pink')
+            else:
+                ax.fill_between(np.arange(start, end), -1, 0, color='lightblue')
+        ax.set_ylim((-1, 1))
+        # if chrom == '19': break
+        cohorts_tag = '_'.join(cohorts)
+    png_path = f'{plot_dir}/{cohorts_tag}.merged.png'
+    plt.tight_layout()
+    plt.savefig(png_path)
+
         
+update_regions = False
 logging.basicConfig(level = logging.DEBUG)
-gene_list_path = '/juno/work/shah/users/chois7/tickets/cohort-cn-qc/resources/gene_list.txt'
-for cohorts in (['SPECTRUM'], ['Metacohort'], ['APOLLO-H'], ['SPECTRUM', 'Metacohort', 'APOLLO-H']):
-#for cohorts in (['SPECTRUM', 'Metacohort', 'APOLLO-H'],):
-#for cohorts in [['SPECTRUM-DLP']]:
-    cn = CopyNumberChangeData(gene_list=gene_list_path, cohorts=cohorts)
+# gene_list_path = '/juno/work/shah/users/chois7/tickets/cohort-cn-qc/resources/gene_list.txt'
+gene_list_path = '/juno/work/shah/users/chois7/tickets/cohort-cn-qc/resources/gene_list.simple.txt'
+# for cohorts in (['SPECTRUM-DLP'], ['SPECTRUM'], ['Metacohort'], ['APOLLO-H'], ['SPECTRUM', 'Metacohort', 'APOLLO-H']):
+# for cohorts in (['APOLLO-H'], ['SPECTRUM', 'Metacohort', 'APOLLO-H']):
+for cohorts in (['SPECTRUM-DLP'], ['SPECTRUM'], ['Metacohort']):
+    cn = CopyNumberChangeData(gene_list=gene_list_path, cohorts=cohorts, update_regions=update_regions)
+    plot_peaks_troughs(cn, cn.peak_params)
+    plot_merged_peaks_troughs(cn.peaks_troughs)
+    # break
+    
     cohort_symbol = '_'.join(cn.cohorts)
+    # break
     for signature in cn.signature_counts:
         logging.info(f'processing cohorts:{cohorts} signature:{signature}')
-        if cn.signature_counts[signature] > 5:
+        if cn.signature_counts[signature] > 3:
             logging.info(f'plotting cohorts:{cohorts} signature:{signature}')
-            cn.plot_pan_chrom_cn(group=signature, out_path=f'{cohort_symbol}.{signature}.pdf')
-            cn.plot_per_chrom_cn(group=signature, out_path=f'{cohort_symbol}.{signature}.per-chrom.pdf')
-    
-    if cohorts != [['SPECTRUM-DLP']]:
+            # cn.plot_pan_chrom_cn(group=signature, out_path=f'cn_plots/{cohort_symbol}.{signature}.pdf')
+            # cn.plot_per_chrom_cn(group=signature, out_path=f'cn_plots/{cohort_symbol}.{signature}.per-chrom.pdf')
+            cn.plot_pan_chrom_cn(group=signature, out_path=f'metacohort/{cohort_symbol}.{signature}.pdf')
+            cn.plot_per_chrom_cn(group=signature, out_path=f'metacohort/{cohort_symbol}.{signature}.per-chrom.pdf')
+            
+    if True:#cohorts != [['SPECTRUM-DLP']]:
+        if not update_regions: 
+            cn.gene_ranges.update(cn.peaks_troughs)
         gene_cn = cn.get_gene_cn_counts()
         results = evaluate_enrichment(cn.signatures, cn.signature_counts, cn.gene_ranges.keys(), 
                 cn.sample_counts, padj_cutoff=0.1)
-        results.to_csv(f'enrichment.{cohort_symbol}.tsv', sep='\t', index=False)
+        # results.to_csv(f'enrichment/enrichment.{cohort_symbol}.tsv', sep='\t', index=False)
+        results.to_csv(f'metacohort/enrichment/enrichment.{cohort_symbol}.tsv', sep='\t', index=False)
