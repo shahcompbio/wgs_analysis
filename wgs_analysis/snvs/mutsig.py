@@ -198,7 +198,17 @@ def normalize_trinucleotides(data):
     return data, ordered_types
 
 
-def plot_mutation_spectra(data, count_column=None):
+mut_type_colors = {
+    'C>A': [3/256,189/256,239/256],
+    'C>G': [1/256,1/256,1/256],
+    'C>T': [228/256,41/256,38/256],
+    'T>A': [203/256,202/256,202/256],
+    'T>C': [162/256,207/256,99/256],
+    'T>G': [236/256,199/256,197/256],
+}
+
+
+def plot_mutation_spectra(data, count_column=None, fig=None):
     """ Plot 96 channel mutation spectra.
 
     Args:
@@ -236,9 +246,11 @@ def plot_mutation_spectra(data, count_column=None):
     font = matplotlib.font_manager.FontProperties()
     font.set_family('monospace')
 
-    fig = plt.figure(figsize=(16, 3), dpi=300)
+    if fig is None:
+        fig = plt.figure(figsize=(16, 3), dpi=300)
+
     for mut_type, mut_type_data in plot_data.groupby('norm_mutation_type'):
-        plt.bar(x='index', height=count_column, data=mut_type_data, label=mut_type)
+        plt.bar(x='index', height=count_column, data=mut_type_data, label=mut_type, color=mut_type_colors[mut_type])
     plt.xticks(plot_data['index'], plot_data['norm_tri_nucleotide_context'], rotation=90, fontproperties=font)
     plt.xlim((-1, 97))
     plt.legend(bbox_to_anchor=(1, 1), loc='upper left')
