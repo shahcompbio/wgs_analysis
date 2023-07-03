@@ -320,3 +320,139 @@ def plot_breakends(ax, breakends, chromosome=None, lw=0.5):
     ax.set_ylim((ylim[0], ylim[1] + 0.5 * (ylim[1] - ylim[0])))
 
 
+def plot_arrow(ax, x0, y0, xlength, ylength, color, 
+               arrow_width = 0.05, arrow_edgecolor = (0,0,0,0)):
+    """ Plot an arrow in `ax` from (x0, y0) with lengths of (xlength, ylength)
+    """
+    ax.arrow(x0, y0, xlength, ylength, facecolor=color, 
+             width=arrow_width, head_width=arrow_width, 
+             edgecolor=arrow_edgecolor, length_includes_head=True) 
+
+def is_pos_in_xlim(chrom, pos, plot_chrom, xlim):
+    """ Check if given chrom and pos are in plot limits
+    """
+    if chrom != plot_chrom:
+        return False
+    xmin, xmax = xlim
+    if pos < xmin: return False
+    if pos > xmax: return False
+    return True
+
+
+def plot_sv_on_ax(ax, sv, chromosome):
+    """ Plot adjacencies in a given Axes instance
+
+    Args:
+        ax: matplotlib axis
+        sv: consensus csv-like sv table
+    
+    Kwargs:
+        chromosome: chromosome that `ax` is based on
+
+    The breakends table should have the following columns:
+        - chromosome_[12]
+        - position_[12]
+        - strand_[12]
+        - gene_name_[12]
+        - gene_location_[12]
+        - type
+    """
+    svs = sv.copy()
+    svcolors = {
+        'deletion':'blue', 'insertion':'green', 'inversion':'purple', 'duplication':'red', 'translocation':'black'
+    }
+    linewidth = 1
+    codes = [
+        matplotlib.path.Path.MOVETO,
+        matplotlib.path.Path.CURVE4,
+        matplotlib.path.Path.CURVE4,
+        matplotlib.path.Path.CURVE4,
+    ]
+    svs['chromosome_1'] = svs['chromosome_1'].str.replace('chr', '')
+    svs['chromosome_2'] = svs['chromosome_2'].str.replace('chr', '')
+    xmin, xmax = ax.get_xlim()
+    ymin, ymax = ax.get_ylim()
+    x_offset = (xmax - xmin) / 100
+    chromosomes = [str(c) for c in range(1, 22+1)] + ['X', 'Y']
+
+    for i, (rix, row) in enumerate(svs.iterrows()):
+        # sv features
+        chrom1, chrom2 = row['chromosome_1'], row['chromosome_2']
+        assert chrom1 in chromosomes and chrom2 in chromosomes
+        pos1, pos2 = row['position_1'], row['position_2']
+        strand1, strand2 = row['strand_1'], row['strand_2']
+        gene1, gene2 = row['gene_name_1'], row['gene_name_2']
+        geneloc1, geneloc2 = row['gene_location_1'], row['gene_location_2']
+        
+        if chrom1 == chrom2 and pos1 > pos2:
+            pos1, pos2, strand1, strand2 = pos2, pos1, strand2, strand1
+            gene1, gene2, geneloc1, geneloc2 = gene2, gene1, geneloc2, geneloc1
+        elif chromosomes.index(chrom2) < chromosomes.index(chrom1):
+            chrom1, chrom2, pos1, pos2, strand1, strand2 = chrom2, chrom1, pos2, pos1, strand2, strand1
+            gene1, gene2, geneloc1, geneloc2 = gene2, gene1, geneloc2, geneloc1
+
+        svtype = row['type']
+        if (not is_pos_in_xlim(chrom1, pos1, chromosome, ax.get_xlim()) and 
+            not is_pos_in_xlim(chrom2, pos2, chromosome, ax.get_xlim())): 
+            continue
+        svcolor = svcolors[svtype]
+        arrow_facecolor = svcolor
+        length = abs(pos2 - pos1)
+        if 'length' in row:
+            length = row['length']
+        svtext = f'{length}bp'
+
+        x1, x2 = pos1, pos2
+        x1_between_xlim = chrom1 == chromosome and x1 >= xmin and x1 < xmax
+        x2_between_xlim = chrom2 == chromosome and x2 >= xmin and x2 < xmax
+        y_diff = ymax - ymin
+        y_top = ymin + 0.6 * y_diff # ymin + 0.3 * y_diff
+        offset_base = int(y_diff * 0.15)
+        offset_with_ix = offset_base * 0.7 * (i+1)
+        y_offset = max(offset_base, offset_with_ix)
+        arrow_width = y_diff / 100
+
+        # plot sv
+        x1_component = [(xmin, y_top+y_offset), (xmin+1, y_top+y_offset)]
+        x2_component = [(xmax-1, y_top+y_offset), (xmax, y_top+y_offset)]
+        if x1_between_xlim:
+            if svtype == 'TRA':
+                # svtext = f'~chr{chrom2}:{pos2}'
+                svtext = f'~ {gene2}: {geneloc2}'
+                
+            x1_component = [(x1, y_top), (x1, y_top+y_offset)]
+            ax.plot([x1, x1], [0, y_top], color=svcolor, linewidth=linewidth)
+            if strand1 == '+': plot_arrow(ax, x1-x_offset, y_top, +x_offset, 0, color=arrow_facecolor, arrow_width=arrow_width)
+            else:              plot_arrow(ax, x1+x_offset, y_top, -x_offset, 0, color=arrow_facecolor, arrow_width=arrow_width)
+        else: 
+            pass 
+
+        if x2_between_xlim:
+            if svtype == 'TRA':
+                # svtext = f'~chr{chrom1}:{pos1}'
+                svtext = f'~ {gene1}: {geneloc1}'
+            x2_component = [(x2, y_top+y_offset), (x2, y_top)]
+            ax.plot([x2, x2], [0, y_top], color=svcolor, linewidth=linewidth)            
+            if strand2 == '+': plot_arrow(ax, x2-x_offset, y_top, +x_offset, 0, color=arrow_facecolor, arrow_width=arrow_width)
+            else:              plot_arrow(ax, x2+x_offset, y_top, -x_offset, 0, color=arrow_facecolor, arrow_width=arrow_width)
+        else: 
+            pass
+
+        verts = x1_component + x2_component
+        path = matplotlib.path.Path(verts, codes)
+        patch = matplotlib.patches.PathPatch(path, facecolor='none', lw=0.5, edgecolor=svcolor)
+        ax.add_patch(patch)
+        y_text = (y_top + y_offset)# + 0.15 * y_diff
+
+        if x1_between_xlim and x2_between_xlim:
+            x_text = (x1 + x2) // 2
+        elif x1_between_xlim and not x2_between_xlim:
+            x_text = (x1 + xmax) // 2
+        elif not x1_between_xlim and x2_between_xlim:
+            x_text = (xmin + x2) // 2
+        else:
+            raise ValueError('coordinates not between x1 or x2')
+        ax.text(x_text, y_text, svtext, color=svcolor, ha='center', fontdict={'size':11})
+        if ymax < y_text: 
+            ax.set_ylim((ymin, y_text))
+            ax.spines['left'].set_bounds(ymin, y_text)
