@@ -108,7 +108,7 @@ def type_size_plot(data, type_col='type'):
             'translocation',
         ])
 
-    seaborn.factorplot(
+    seaborn.catplot(
         x=type_col, hue='size_class', kind='count',
         data=data, sharex=False,
         aspect=3, height=2.5)
