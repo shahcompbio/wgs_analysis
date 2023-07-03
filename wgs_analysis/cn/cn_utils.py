@@ -957,7 +957,8 @@ def merge_peaks_troughs(peaks_troughs:dict, chroms:Iterable):
         chrom_pts = [[value[1], value[2]] for (key, value) in peaks_troughs.items()
             if value[0] == chrom]
         chrom_pts.sort()
-        logging.debug(f'[{chrom}] chrom_pts: \n{chrom_pts}')        if len(chrom_pts) > 0:
+        logging.debug(f'[{chrom}] chrom_pts: \n{chrom_pts}')
+        if len(chrom_pts) > 0:
             chrom_merged_start_ends = merge_intervals(chrom_pts)
             logging.debug(f'[{chrom}] chrom_merged_start_ends: \n{chrom_merged_start_ends}')
             chrom_regions = {f'{chrom}:{start}-{end}': (chrom, start, end) 
