@@ -375,7 +375,7 @@ def plot_sv_on_ax(ax, sv, chromosome):
     x_offset = (xmax - xmin) / 100
     chromosomes = [str(c) for c in range(1, 22+1)] + ['X', 'Y']
 
-    for i, (rix, row) in enumerate(svs.iterrows()):
+    for i, (_, row) in enumerate(svs.iterrows()):
         # sv features
         chrom1, chrom2 = row['chromosome_1'], row['chromosome_2']
         assert chrom1 in chromosomes and chrom2 in chromosomes

@@ -15,6 +15,7 @@ import matplotlib.pyplot as plt
 from matplotlib.colors import colorConverter
 import seaborn
 
+import wgs_analysis.plots as plots
 import wgs_analysis.plots.colors
 import wgs_analysis.plots.positions
 import wgs_analysis.plots.utils
@@ -554,10 +555,10 @@ def uniform_resegment(cnv, segment_length=100000):
     # First segment cannot start at coordinate less than 1
     assert cnv['start'].min() >= 1
 
-    cnv['seg_idx'] = xrange(len(cnv.index))
+    cnv['seg_idx'] = range(len(cnv.index))
 
     uniform_segments = create_uniform_segments(segment_length, cnv['end'].max())
-    uniform_segments['reseg_idx'] = xrange(len(uniform_segments.index))
+    uniform_segments['reseg_idx'] = range(len(uniform_segments.index))
 
     # Find starts of the resegmentation that fall within cnv segments
     seg_idx_1, reseg_idx_1 = wgs_analysis.algorithms.merge.interval_position_overlap_unsorted(
