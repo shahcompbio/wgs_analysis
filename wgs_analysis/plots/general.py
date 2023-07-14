@@ -19,6 +19,81 @@ import matplotlib.pyplot as plt
 
 #     fig.savefig(legend_filename, bbox_inches='tight')
 
+_gtags = [s.replace('\n', '') for s in '''
+gpos1,gpos2,gpos3,gpos4,gpos5,gpos6,gpos7,gpos8,
+gpos9,gpos10,gpos11,gpos12,gpos13,gpos14,gpos15,gpos16,
+gpos17,gpos18,gpos19,gpos20,gpos21,gpos22,gpos23,gpos24,
+gpos25,gpos26,gpos27,gpos28,gpos29,gpos30,gpos31,gpos32,
+gpos33,gpos34,gpos35,gpos36,gpos37,gpos38,gpos39,gpos40,
+gpos41,gpos42,gpos43,gpos44,gpos45,gpos46,gpos47,gpos48,
+gpos49,gpos50,gpos51,gpos52,gpos53,gpos54,gpos55,gpos56,
+gpos57,gpos58,gpos59,gpos60,gpos61,gpos62,gpos63,gpos64,
+gpos65,gpos66,gpos67,gpos68,gpos69,gpos70,gpos71,gpos72,
+gpos73,gpos74,gpos75,gpos76,gpos77,gpos78,gpos79,gpos80,
+gpos81,gpos82,gpos83,gpos84,gpos85,gpos86,gpos87,gpos88,
+gpos89,gpos90,gpos91,gpos92,gpos93,gpos94,gpos95,gpos96,
+gpos97,gpos98,gpos99,gpos100,gneg,acen,gvar,stalk
+'''.strip().split(',')]
+
+_gcolors = [
+    "#FDFDFD", "#FBFBFB", "#F8F8F8", "#F6F6F6", "#F3F3F3", "#F1F1F1", "#EEEEEE", "#ECECEC", 
+    "#E9E9E9", "#E6E6E6", "#E4E4E4", "#E1E1E1", "#DFDFDF", "#DCDCDC", "#DADADA", "#D7D7D7", 
+    "#D4D4D4", "#D2D2D2", "#CFCFCF", "#CDCDCD", "#CACACA", "#C8C8C8", "#C5C5C5", "#C3C3C3", 
+    "#C0C0C0", "#BDBDBD", "#BBBBBB", "#B8B8B8", "#B6B6B6", "#B3B3B3", "#B1B1B1", "#AEAEAE", 
+    "#ACACAC", "#A9A9A9", "#A6A6A6", "#A4A4A4", "#A1A1A1", "#9F9F9F", "#9C9C9C", "#9A9A9A", 
+    "#979797", "#949494", "#929292", "#8F8F8F", "#8D8D8D", "#8A8A8A", "#888888", "#858585", 
+    "#838383", "#808080", "#7D7D7D", "#7B7B7B", "#787878", "#767676", "#737373", "#717171", 
+    "#6E6E6E", "#6C6C6C", "#696969", "#666666", "#646464", "#616161", "#5F5F5F", "#5C5C5C", 
+    "#5A5A5A", "#575757", "#545454", "#525252", "#4F4F4F", "#4D4D4D", "#4A4A4A", "#484848", 
+    "#454545", "#434343", "#404040", "#3D3D3D", "#3B3B3B", "#383838", "#363636", "#333333", 
+    "#313131", "#2E2E2E", "#2C2C2C", "#292929", "#262626", "#242424", "#212121", "#1F1F1F", 
+    "#1C1C1C", "#1A1A1A", "#171717", "#141414", "#121212", "#0F0F0F", "#0D0D0D", "#0A0A0A", 
+    "#080808", "#050505", "#030303", "#000000", "#FFFFFF", "#660033", "#660099", "#6600CC", 
+]
+
+
+def get_cytobands_dataframe(genome_version, _gtags=_gtags, _gcolors=_gcolors):
+    """ Return cytobands DataFrame with:
+        chromosome	start	end	name	gtag	color
+        0	1	0	2300000	p36.33	gneg	#FFFFFF
+        1	1	2300000	5400000	p36.32	gpos25	#C0C0C0
+        2	1	5400000	7200000	p36.31	gneg	#FFFFFF
+        3	1	7200000	9200000	p36.23	gpos25	#C0C0C0
+        4	1	9200000	12700000	p36.22	gneg	#FFFFFF
+        ...	...	...	...	...	...	...
+    """
+    import gzip
+    import requests
+    
+    cytobands_paths = {
+        'hg19': 'https://s3.amazonaws.com/igv.broadinstitute.org/genomes/seq/hg19/cytoBand.txt',
+        'hg38': 'https://s3.amazonaws.com/igv.org.genomes/hg38/annotations/cytoBandIdeo.txt.gz',
+        'grch38': 'https://s3.amazonaws.com/igv.org.genomes/hg38/annotations/cytoBandIdeo.txt.gz'
+    }
+
+    cytobands = None
+    url = cytobands_paths[genome_version]
+    response = requests.get(url, stream=True)
+
+    if response.status_code == 200:
+        cytobands_cols = ['chromosome', 'start', 'end', 'name', 'gtag']
+        cytobands = pd.DataFrame(columns=cytobands_cols)
+        if url.endswith('.gz'):
+            gzip_file = gzip.GzipFile(fileobj=response.raw)
+            text = gzip_file.read().decode('utf-8')
+        else:
+            text = response.text
+        fields = [line.split('\t') for line in text.split('\n')]
+        for field in fields:
+            if len(field) == len(cytobands_cols):
+                cytobands.loc[cytobands.shape[0]] = field
+        cytobands['chromosome'] = cytobands['chromosome'].str.replace('chr', '')
+        _gtag2color = dict(zip(_gtags, _gcolors))
+        cytobands['color'] = cytobands['gtag'].map(_gtag2color)
+    else:
+        print(f'ERROR: Failed to download the file in {url}')
+        
+    return response, text, fields, cytobands
 
 # UCSC-like gene plotting
 def is_overlap(interval1, interval2):

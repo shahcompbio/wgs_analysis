@@ -337,13 +337,16 @@ def is_pos_in_xlim(chrom, pos, plot_chrom, xlim):
     return True
 
 
-def plot_sv_on_ax(ax, sv, chromosome, gene_text=False):
+def plot_sv_on_ax(ax, sv, chromosome, 
+        no_sv_text=False, gene_text=False, y_diff_factor=0.6):
     """ Plot adjacencies in a given Axes instance
 
     Args:
-        ax: matplotlib axis
-        sv: consensus csv-like sv table
+        ax: matplotlib Axes (note: xlim, ylim should be already set)
+        sv: consensus csv-like sv table (either pd.DataFrame [multiple] or pd.Series [single SV])
+        no_sv_text: do not print SV sizes or translocation destinations
         gene_text [bool]: show target gene annotation for translocation instead of target coordinates
+        y_diff_factor: how tall the vertical bar of an SV should be: y1 = y_min + (y_max-y_min) * y_diff_factor
     
     Kwargs:
         chromosome: chromosome that `ax` is based on
@@ -357,6 +360,8 @@ def plot_sv_on_ax(ax, sv, chromosome, gene_text=False):
         - type
     """
     svs = sv.copy()
+    if type(svs) == pd.Series:
+        svs = pd.DataFrame(svs).T # make into a DataFrame
     svcolors = {
         'deletion':'blue', 'insertion':'green', 'inversion':'purple', 'duplication':'red', 'translocation':'black'
     }
@@ -410,7 +415,7 @@ def plot_sv_on_ax(ax, sv, chromosome, gene_text=False):
         x1_between_xlim = chrom1 == chromosome and x1 >= xmin and x1 < xmax
         x2_between_xlim = chrom2 == chromosome and x2 >= xmin and x2 < xmax
         y_diff = ymax - ymin
-        y_top = ymin + 0.6 * y_diff # ymin + 0.3 * y_diff
+        y_top = ymin + y_diff * y_diff_factor # ymin + 0.3 * y_diff
         offset_base = int(y_diff * 0.15)
         offset_with_ix = offset_base * 0.7 * (i+1)
         y_offset = max(offset_base, offset_with_ix)
@@ -458,7 +463,9 @@ def plot_sv_on_ax(ax, sv, chromosome, gene_text=False):
             x_text = (xmin + x2) // 2
         else:
             raise ValueError('coordinates not between x1 or x2')
-        ax.text(x_text, y_text, svtext, color=svcolor, ha='center', fontdict={'size':11})
-        if ymax < y_text: 
-            ax.set_ylim((ymin, y_text))
-            ax.spines['left'].set_bounds(ymin, y_text)
+
+        if not no_sv_text:
+            ax.text(x_text, y_text, svtext, color=svcolor, ha='center', fontdict={'size':11})
+            if ymax < y_text: 
+                ax.set_ylim((ymin, y_text))
+                ax.spines['left'].set_bounds(ymin, y_text)

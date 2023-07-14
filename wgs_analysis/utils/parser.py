@@ -151,3 +151,51 @@ def parse_csv_breakpoints(csv_path):
         if 'break_distance' in df.columns:
             df.rename(columns={'break_distance': 'length'}, inplace=True)
     return df[svs_cols]
+
+
+# parse WGS-REMIXT-POSTPROCESS
+def _update_blocks_and_reset_prev(blocks, prev, row, 
+        features=['chromosome', 'start', 'end', 'major_1', 'minor_1']):
+    if prev['chromosome']: # not null
+        blocks = pd.concat([blocks, prev.to_frame().T])
+    prev = pd.Series({f: row[f] for f in features}, index=features)
+    return blocks, prev
+
+
+def merge_segments(remixt):
+    """ Merge remixt segments
+    - remixt: remixt-like DataFrame
+    """
+    #in_pp = '/juno/work/shah/isabl_data_lake/analyses/37/74/23774/SPECTRUM-OV-081_S1_LEFT_OVARY_cn.csv'
+    # remixt = pd.read_table(in_pp, dtype=str, low_memory=False)
+
+    features = ['chromosome', 'start', 'end', 'major_1', 'minor_1'] # only use major_1 and minor_1
+    for feature in features:
+        assert feature in remixt.columns, f'{feature} not in remixt.columns \n[remixt.columns: {remixt.columns}]'
+    remixt = remixt[features] # reduce features for the sake of memory
+
+    # swap cn if minor > major
+    major_smaller_than_minor = (remixt['major_1'] < remixt['minor_1'])
+    remixt.loc[ major_smaller_than_minor, 'major_1' ] = remixt.loc[ major_smaller_than_minor, 'minor_1' ]
+
+    # merge segments with same major_1 and minor_1
+    prev = pd.Series({f:None for f in features}, index=features) # init prev cn
+    blocks = pd.DataFrame(columns=features) # init empty blocks
+
+    for _, row in remixt.iterrows():
+        if prev['chromosome'] != row['chromosome']:
+            blocks, prev = _update_blocks_and_reset_prev(blocks, prev, row)
+            continue
+        if (prev['major_1'] != row['major_1']) or (prev['minor_1'] != row['minor_1']):
+            blocks, prev = _update_blocks_and_reset_prev(blocks, prev, row)
+            continue
+        # if prev['end'] != row['start']:
+        #     blocks, prev = _update_blocks_and_reset_prev(blocks, prev, row)
+        #     continue
+        # update prev block
+        prev['end'] = row['end']
+
+    blocks = pd.concat([blocks, prev.to_frame().T]) # add prev
+    blocks.loc[:, ['start', 'end', 'major_1', 'minor_1']] = blocks.loc[:, ['start', 'end', 'major_1', 'minor_1']].astype(int)
+    blocks['start'] = blocks['start'] + 1 # so segments don't overlap; w/o this !mixFlag[j] error occurs in MutationTimeR step
+    return blocks

@@ -12,7 +12,7 @@ def plot_cn_on_ax(cn, ax, value_name="total_cn", **kwargs):
     ax.set_ylim((-0.5, max_cn+0.5))
     ax.set_yticks(np.arange(0, max_cn+1, 1))
     ax.set_yticklabels([int(t) for t in ax.get_yticks()])
-    for rix, row in cn.iterrows():
-        chrom, start, end = row['chromosome'], int(row['start']), int(row['end'])
+    for _, row in cn.iterrows():
+        _, start, end = row['chromosome'], int(row['start']), int(row['end'])
         cn_value = float(row[value_name])
         ax.plot([start, end], [cn_value, cn_value], solid_capstyle='butt', **kwargs)
