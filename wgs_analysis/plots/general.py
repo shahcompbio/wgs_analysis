@@ -5,7 +5,9 @@
 
 import matplotlib
 import numpy as np
+import pandas as pd
 import matplotlib.pyplot as plt
+from .. import refgenome
 
 # import wgs_analysis.helpers as helpers
 
@@ -94,6 +96,52 @@ def get_cytobands_dataframe(genome_version, _gtags=_gtags, _gcolors=_gcolors):
         print(f'ERROR: Failed to download the file in {url}')
         
     return response, text, fields, cytobands
+
+
+def add_cytobands_to_ax(ax, chromosome, start, end, genome_version, show_xaxis_tick_top,
+        _gtags=_gtags, _gcolors=_gcolors):
+    """ Plot cytobands to given Axes
+    - ax: pyplot Axes
+    - cytobands: cytobands DataFrame
+    - chromosome: chromosome (either with chr prefix or not)
+    - start: highlighting coordinate start
+    - end: highlighting coordinate end
+    - genome_version: reference genome version {"hg19", "hg38", "grch38"}
+    - show_xaxis_tick_top: show xaxis ticks at top
+    """
+    cytobands = get_cytobands_dataframe(genome_version, _gtags=_gtags, _gcolors=_gcolors)
+    if chromosome.startswith('chr'):
+        chromosome = chromosome.replace('chr', '')
+
+    ax.set_yticklabels([]); ax.set_yticks([]); ax.set_ylabel('')
+    ax.set_xlabel('chr'+chromosome, fontsize=13)
+    if show_xaxis_tick_top:
+        ax.xaxis.set_label_position('top')
+        ax.xaxis.tick_top()
+    
+    linewidth = 3
+    height = 1
+
+    refgenome.set_genome_version(genome_version)
+    chrom_end = refgenome.info.chromosome_lengths.loc[chromosome]
+    ax.set_xlim((0, chrom_end))
+    chrom_cytobands = cytobands[cytobands['chromosome'] == chromosome.replace('chr', '')]
+    for _, row in chrom_cytobands.iterrows():
+        length = row['end'] - row['start']
+        box = matplotlib.patches.FancyBboxPatch(xy=(row['start'], 0), width=length, height=height, color=row['color'],
+                                                boxstyle="round,pad=0,rounding_size=0")
+        ax.add_patch(box)
+    
+    x_span = end - start
+    y_span = height
+    x0 = start 
+    width_adj = x_span
+    y0 = 0 + y_span / 50
+    height_adj = height - y_span / 40
+    
+    highlight = matplotlib.patches.Rectangle(xy=(x0, y0), width=width_adj, height=height_adj, zorder=2,
+                                             edgecolor='red', facecolor='none', linewidth=linewidth, linestyle=(0, (1,1)))
+    ax.add_patch(highlight)
 
 # UCSC-like gene plotting
 def is_overlap(interval1, interval2):

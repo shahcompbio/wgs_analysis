@@ -5,6 +5,7 @@ import pkg_resources
 
 def read_chromosome_lengths(genome_fasta_index):
     fai = pd.read_csv(genome_fasta_index, sep='\t', header=None, names=['chrom', 'length', 'V3', 'V4', 'V5'])
+    fai['chrom'] = fai['chrom'].str.replace('chr', '')
     fai = fai.set_index('chrom')['length']
     return fai.to_dict()
 
@@ -33,7 +34,7 @@ class RefGenomeInfo(object):
             }).reset_index()
 
         elif version == 'grch38':
-            self.chromosomes = [f'chr{a}' for a in range(1, 23)] + ['chrX', 'chrY']
+            self.chromosomes = [str(a) for a in range(1, 23)] + ['X', 'Y']
 
             genome_fasta_index = pkg_resources.resource_filename('wgs_analysis', 'data/GRCh38.fa.fai')
 

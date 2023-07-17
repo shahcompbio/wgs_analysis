@@ -150,6 +150,8 @@ def parse_csv_breakpoints(csv_path):
     if 'length' not in df.columns:
         if 'break_distance' in df.columns:
             df.rename(columns={'break_distance': 'length'}, inplace=True)
+        else:
+            raise ValueError(f'neither `length` nor `break_distance` are in df.columns')
     return df[svs_cols]
 
 
