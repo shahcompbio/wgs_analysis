@@ -14,6 +14,11 @@ import scipy
 from .. import plots
 from .. import refgenome
 
+
+
+print(wgs_analysis.__file__, file=sys.stderr)
+print(refgenome.__file__, 'say hi', file=sys.stderr)
+
 default_rearrangement_types = ['foldback', 'deletion', 'duplication', 'inversion', 'balanced', 'unbalanced', 'complex']
 default_rearrangement_type_colors = seaborn.color_palette('Dark2', len(default_rearrangement_types))
 
