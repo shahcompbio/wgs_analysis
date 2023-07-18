@@ -1,1 +1,6 @@
 *.pyc
+.ipynb_checkpoints
+.vscode
+wgs_analysis.egg-info
+build
+test_svplot.ipynb
