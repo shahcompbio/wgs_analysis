@@ -381,7 +381,7 @@ def plot_sv_on_ax(ax, sv, chromosome,
     chromosomes = [str(c) for c in range(1, 22+1)] + ['X', 'Y']
     gene_cols = ['gene_name_1', 'gene_name_2', 'gene_location_1', 'gene_location_2']
     has_gene_info = svs.columns[svs.columns.isin(gene_cols)].shape[0] == len(gene_cols)
-    print(svs)
+    # print(svs)
 
     for i, (_, row) in enumerate(svs.iterrows()):
         # sv features
@@ -405,8 +405,8 @@ def plot_sv_on_ax(ax, sv, chromosome,
         svtype = row['type']
         if (not is_pos_in_xlim(chrom1, pos1, chromosome, ax.get_xlim()) and 
             not is_pos_in_xlim(chrom2, pos2, chromosome, ax.get_xlim())): 
-            print(chrom1, pos1, chromosome, ax.get_xlim())
-            print(chrom2, pos2, chromosome, ax.get_xlim())
+            # print(chrom1, pos1, chromosome, ax.get_xlim())
+            # print(chrom2, pos2, chromosome, ax.get_xlim())
             continue
         svcolor = svcolors[svtype]
         arrow_facecolor = svcolor
@@ -429,7 +429,7 @@ def plot_sv_on_ax(ax, sv, chromosome,
         x1_component = [(xmin, y_top+y_offset), (xmin+1, y_top+y_offset)]
         x2_component = [(xmax-1, y_top+y_offset), (xmax, y_top+y_offset)]
         if x1_between_xlim:
-            print([x1, x1], [0, y_top])
+            # print([x1, x1], [0, y_top])
             if svtype == 'TRA':
                 svtext = f'~chr{chrom2}:{pos2}'
                 if has_gene_info and gene_text:
@@ -440,11 +440,11 @@ def plot_sv_on_ax(ax, sv, chromosome,
             if strand1 == '+': plot_arrow(ax, x1-x_offset, y_top, +x_offset, 0, color=arrow_facecolor, arrow_width=arrow_width)
             else:              plot_arrow(ax, x1+x_offset, y_top, -x_offset, 0, color=arrow_facecolor, arrow_width=arrow_width)
         else: 
-            print(f'x1_between_xlim: {x1_between_xlim}')
+            # print(f'x1_between_xlim: {x1_between_xlim}')
             pass 
 
         if x2_between_xlim:
-            print([x2, x2], [0, y_top])
+            # print([x2, x2], [0, y_top])
             if svtype == 'TRA':
                 svtext = f'~chr{chrom1}:{pos1}'
                 if has_gene_info and gene_text:
@@ -454,7 +454,7 @@ def plot_sv_on_ax(ax, sv, chromosome,
             if strand2 == '+': plot_arrow(ax, x2-x_offset, y_top, +x_offset, 0, color=arrow_facecolor, arrow_width=arrow_width)
             else:              plot_arrow(ax, x2+x_offset, y_top, -x_offset, 0, color=arrow_facecolor, arrow_width=arrow_width)
         else: 
-            print(f'x2_between_xlim: {x2_between_xlim}')
+            # print(f'x2_between_xlim: {x2_between_xlim}')
             pass
 
         verts = x1_component + x2_component
