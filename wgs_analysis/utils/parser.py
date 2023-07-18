@@ -104,10 +104,10 @@ def parse_vcf_breakpoints(vcf_path, refgenome=refgenome):
     vcf_cols = ['chrom', 'pos', 'breakend', 'ref', 'alt', 'QUAL', 'FILTER', 'INFO', 'FORMAT', 'sample']
     svs_cols = ['chromosome_1', 'position_1', 'strand_1', 
                 'chromosome_2', 'position_2', 'strand_2', 'type', 'length']
-    df = pd.read_table(vcf_path, comment='#', names=vcf_cols)
+    df = pd.read_table(vcf_path, comment='#', names=vcf_cols, dtype={'chrom':str})
     chroms = refgenome.info.chromosomes
 
-    svs = pd.DataFrame(columns=svs_cols) # savana sv
+    svs = pd.DataFrame(columns=svs_cols,) # savana sv
 
     df['adjacency'] = df['breakend'].str.rsplit('_', 1, expand=True)[0]
     
