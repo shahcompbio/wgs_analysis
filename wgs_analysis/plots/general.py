@@ -50,7 +50,7 @@ _gcolors = [
     "#454545", "#434343", "#404040", "#3D3D3D", "#3B3B3B", "#383838", "#363636", "#333333", 
     "#313131", "#2E2E2E", "#2C2C2C", "#292929", "#262626", "#242424", "#212121", "#1F1F1F", 
     "#1C1C1C", "#1A1A1A", "#171717", "#141414", "#121212", "#0F0F0F", "#0D0D0D", "#0A0A0A", 
-    "#080808", "#050505", "#030303", "#000000", "#FFFFFF", "#660033", "#660099", "#6600CC", 
+    "#080808", "#050505", "#030303", "#000000", "#FFFFFF", "#660033", "#9966EE", "#6600CC", 
 ]
 
 
@@ -95,7 +95,7 @@ def get_cytobands_dataframe(genome_version, _gtags=_gtags, _gcolors=_gcolors):
     else:
         print(f'ERROR: Failed to download the file in {url}')
         
-    return response, text, fields, cytobands
+    return cytobands
 
 
 def add_cytobands_to_ax(ax, chromosome, start, end, genome_version, show_xaxis_tick_top,
@@ -125,10 +125,12 @@ def add_cytobands_to_ax(ax, chromosome, start, end, genome_version, show_xaxis_t
     refgenome.set_genome_version(genome_version)
     chrom_end = refgenome.info.chromosome_lengths.loc[chromosome]
     ax.set_xlim((0, chrom_end))
-    chrom_cytobands = cytobands[cytobands['chromosome'] == chromosome.replace('chr', '')]
+    chrom_cytobands = cytobands[cytobands['chromosome'] == (chromosome.replace('chr', ''))]
     for _, row in chrom_cytobands.iterrows():
-        length = row['end'] - row['start']
-        box = matplotlib.patches.FancyBboxPatch(xy=(row['start'], 0), width=length, height=height, color=row['color'],
+        cyto_start, cyto_end = int(row['start']), int(row['end'])
+        cyto_color = row['color']
+        length = cyto_end - cyto_start
+        box = matplotlib.patches.FancyBboxPatch(xy=(cyto_start, 0), width=length, height=height, color=cyto_color,
                                                 boxstyle="round,pad=0,rounding_size=0")
         ax.add_patch(box)
     
