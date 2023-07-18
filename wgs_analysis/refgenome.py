@@ -12,6 +12,8 @@ def read_chromosome_lengths(genome_fasta_index):
 
 class RefGenomeInfo(object):
     def __init__(self, version):
+        self.version = version
+        
         if version == 'hg19':
             self.chromosomes = [str(a) for a in range(1, 23)] + ['X', 'Y']
 
@@ -33,7 +35,7 @@ class RefGenomeInfo(object):
                 'chromosome_mid': self.chromosome_mid,
             }).reset_index()
 
-        elif version == 'grch38':
+        elif version == 'hg38' or version == 'grch38':
             self.chromosomes = [str(a) for a in range(1, 23)] + ['X', 'Y']
 
             genome_fasta_index = pkg_resources.resource_filename('wgs_analysis', 'data/GRCh38.fa.fai')
@@ -53,6 +55,9 @@ class RefGenomeInfo(object):
                 'chromosome_start': self.chromosome_start,
                 'chromosome_mid': self.chromosome_mid,
             }).reset_index()
+        
+        else:
+            raise ValueError(f'{version} is not supported')
 
 info = None
 
