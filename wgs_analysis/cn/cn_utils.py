@@ -1329,7 +1329,8 @@ logging.basicConfig(level = logging.DEBUG)
 gene_list_path = '/juno/work/shah/users/chois7/tickets/cohort-cn-qc/resources/gene_list.simple.txt'
 # for cohorts in (['SPECTRUM-DLP'], ['SPECTRUM'], ['Metacohort'], ['APOLLO-H'], ['SPECTRUM', 'Metacohort', 'APOLLO-H']):
 # for cohorts in (['APOLLO-H'], ['SPECTRUM', 'Metacohort', 'APOLLO-H']):
-for cohorts in (['SPECTRUM-DLP'], ['SPECTRUM'], ['Metacohort']):
+#for cohorts in (['SPECTRUM-DLP'], ['SPECTRUM'], ['Metacohort']):
+for cohorts in (['Metacohort'],):
     cn = CopyNumberChangeData(gene_list=gene_list_path, cohorts=cohorts, update_regions=update_regions)
     plot_peaks_troughs(cn, cn.peak_params)
     plot_merged_peaks_troughs(cn.peaks_troughs)
@@ -1343,8 +1344,10 @@ for cohorts in (['SPECTRUM-DLP'], ['SPECTRUM'], ['Metacohort']):
             logging.info(f'plotting cohorts:{cohorts} signature:{signature}')
             # cn.plot_pan_chrom_cn(group=signature, out_path=f'cn_plots/{cohort_symbol}.{signature}.pdf')
             # cn.plot_per_chrom_cn(group=signature, out_path=f'cn_plots/{cohort_symbol}.{signature}.per-chrom.pdf')
-            cn.plot_pan_chrom_cn(group=signature, out_path=f'metacohort/{cohort_symbol}.{signature}.pdf')
-            cn.plot_per_chrom_cn(group=signature, out_path=f'metacohort/{cohort_symbol}.{signature}.per-chrom.pdf')
+            #cn.plot_pan_chrom_cn(group=signature, out_path=f'metacohort/{cohort_symbol}.{signature}.pdf')
+            #cn.plot_per_chrom_cn(group=signature, out_path=f'metacohort/{cohort_symbol}.{signature}.per-chrom.pdf')
+            cn.plot_pan_chrom_cn(group=signature, out_path=f'metacohort0719/{cohort_symbol}.{signature}.pdf')
+            cn.plot_per_chrom_cn(group=signature, out_path=f'metacohort0719/{cohort_symbol}.{signature}.per-chrom.pdf')
             
     if True:#cohorts != [['SPECTRUM-DLP']]:
         if not update_regions: 
@@ -1353,4 +1356,5 @@ for cohorts in (['SPECTRUM-DLP'], ['SPECTRUM'], ['Metacohort']):
         results = evaluate_enrichment(cn.signatures, cn.signature_counts, cn.gene_ranges.keys(), 
                 cn.sample_counts, padj_cutoff=0.1)
         # results.to_csv(f'enrichment/enrichment.{cohort_symbol}.tsv', sep='\t', index=False)
-        results.to_csv(f'metacohort/enrichment/enrichment.{cohort_symbol}.tsv', sep='\t', index=False)
+        #results.to_csv(f'metacohort/enrichment/enrichment.{cohort_symbol}.tsv', sep='\t', index=False)
+        results.to_csv(f'metacohort0719/enrichment/enrichment.{cohort_symbol}.tsv', sep='\t', index=False)
