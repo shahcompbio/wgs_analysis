@@ -115,23 +115,21 @@ def get_repr_transcript_id(gtf, gene_name, lenient=False):
         transcript_id = transcript['transcript_id']
     return transcript_id
 
-def add_gene_annotations(ax, gene_exons, return_offset=False):
-    """ Plot UCSC-like gene annotation to Axes
-    - ax: pyplot.Axes
-    - gene_exons[dict]: {gene_symbol: pyranges-like GTF DataFrame}
-    - return_offset: return gene -> offset map [dict]
-
-    Returns: gene2offset[dict] (optional)
-    """
-    gene2offset = defaultdict(int)
+def _get_gene_intervals(gene_exons):
+    # gather gene start-end intervals
     intervals = []
-    for gene, exons in enumerate(gene_exons.items()):
+    for gene, exons in gene_exons.items():
         start_min = exons['Start'].min()
         end_max = exons['End'].max()
         if not np.isnan(start_min) and not np.isnan(end_max):
             interval = (start_min, end_max, gene)
             intervals.append(interval)
     intervals.sort(key=lambda x: (x[0], x[1]))
+    return intervals
+
+def _get_gene_offsets(intervals):
+    # set gene offset according to overlapping intervals
+    gene2offset = defaultdict(int)
     n_intervals = len(intervals)
     margin = 5e4
     for i in range(n_intervals):
@@ -141,7 +139,30 @@ def add_gene_annotations(ax, gene_exons, return_offset=False):
             if is_overlap((start_i-margin, end_i+margin), (start_j-margin, end_j+margin)):
                 if gene2offset[gene_i] == gene2offset[gene_j]:
                     gene2offset[gene_j] += 1
-        
+    return gene2offset
+
+def add_gene_annotations(ax, chromosome, start, end, genes=None, return_offset=False):
+    """ Plot UCSC-like gene annotation to Axes
+    - ax: pyplot.Axes
+    - gene_exons[dict]: {gene_symbol: pyranges-like GTF DataFrame}
+    - return_offset: return gene -> offset map [dict]
+
+    Returns: gene2offset[dict] (optional)
+    """
+    ax.set_xlim((start, end))
+    ax.spines[['top', 'bottom', 'right', 'left']].set_visible(False)
+    ax.set_xticks([]); ax.set_yticks([])
+
+    # setup which genes to plot
+    region = (chromosome, start, end)
+    gene_df = parse_gtf_region(refgenome.info.gtf, region)
+    if genes == None: genes = gene_df['gene_name'].unique() # if no genes put in, use all genes in region
+    gene_exons = {gene: get_gene_repr_exons(gene_df, gene, lenient=False) 
+                  for gene in genes}
+    intervals = _get_gene_intervals(gene_exons)
+    gene2offset = _get_gene_offsets(intervals)
+    
+    # apply offset and plot exon rectangles
     for gene, exons in gene_exons.items():
         if exons.shape[0] == 0: continue # filter out if none
         strands = exons['Strand'].unique()

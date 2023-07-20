@@ -1,3 +1,4 @@
+import pysam
 import numpy as np
 import pandas as pd
 import pkg_resources
@@ -35,6 +36,10 @@ class RefGenomeInfo(object):
                 'chromosome_mid': self.chromosome_mid,
             }).reset_index()
 
+            genome_gtf = pkg_resources.resource_filename('wgs_analysis', 'data/GRCh37.gtf.gz')
+            self.gtf = pysam.TabixFile(genome_gtf)
+
+
         elif version == 'hg38' or version == 'grch38':
             self.chromosomes = [str(a) for a in range(1, 23)] + ['X', 'Y']
 
@@ -55,6 +60,9 @@ class RefGenomeInfo(object):
                 'chromosome_start': self.chromosome_start,
                 'chromosome_mid': self.chromosome_mid,
             }).reset_index()
+
+            genome_gtf = pkg_resources.resource_filename('wgs_analysis', 'data/GRCh38.gtf.gz')
+            self.gtf = pysam.TabixFile(genome_gtf)
         
         else:
             raise ValueError(f'{version} is not supported')
