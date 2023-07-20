@@ -144,11 +144,15 @@ def _get_gene_offsets(intervals):
 def add_gene_annotations(ax, chromosome, start, end, genes=None, return_offset=False):
     """ Plot UCSC-like gene annotation to Axes
     - ax: pyplot.Axes
-    - gene_exons[dict]: {gene_symbol: pyranges-like GTF DataFrame}
-    - return_offset: return gene -> offset map [dict]
+    - chromosome [str]
+    - start [int]
+    - end [int]
+    - genes (optional): list of genes in chromosome:start-end to plot
+    - return_offset (optional): return gene -> offset map [dict]
 
     Returns: gene2offset[dict] (optional)
     """
+    chromosome = chromosome.replace('chr', '')
     ax.set_xlim((start, end))
     ax.spines[['top', 'bottom', 'right', 'left']].set_visible(False)
     ax.set_xticks([]); ax.set_yticks([])
