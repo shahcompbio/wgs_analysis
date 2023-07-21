@@ -45,7 +45,7 @@ def get_include_wgs_samples(cohort:str) -> list:
 def qc_cn_data_and_samples(cn_data:pd.DataFrame) -> None:
     """ Check input cn_data shape
     """ 
-    loggong.debug(f"cn_data.shape: {cn_data.shape}")
+    logging.debug(f"cn_data.shape: {cn_data.shape}")
     n_samples = cn_data.isabl_sample_id.unique().shape
     logging.debug(f"unique sample count: {n_samples}")
 
@@ -1323,38 +1323,39 @@ def plot_merged_peaks_troughs(peaks_troughs, plot_dir='pt_plots'):
     plt.savefig(png_path)
 
         
-update_regions = False
-logging.basicConfig(level = logging.DEBUG)
-# gene_list_path = '/juno/work/shah/users/chois7/tickets/cohort-cn-qc/resources/gene_list.txt'
-gene_list_path = '/juno/work/shah/users/chois7/tickets/cohort-cn-qc/resources/gene_list.simple.txt'
-# for cohorts in (['SPECTRUM-DLP'], ['SPECTRUM'], ['Metacohort'], ['APOLLO-H'], ['SPECTRUM', 'Metacohort', 'APOLLO-H']):
-# for cohorts in (['APOLLO-H'], ['SPECTRUM', 'Metacohort', 'APOLLO-H']):
-#for cohorts in (['SPECTRUM-DLP'], ['SPECTRUM'], ['Metacohort']):
-for cohorts in (['Metacohort'],):
-    cn = CopyNumberChangeData(gene_list=gene_list_path, cohorts=cohorts, update_regions=update_regions)
-    plot_peaks_troughs(cn, cn.peak_params)
-    plot_merged_peaks_troughs(cn.peaks_troughs)
-    # break
-    
-    cohort_symbol = '_'.join(cn.cohorts)
-    # break
-    for signature in cn.signature_counts:
-        logging.info(f'processing cohorts:{cohorts} signature:{signature}')
-        if cn.signature_counts[signature] > 3:
-            logging.info(f'plotting cohorts:{cohorts} signature:{signature}')
-            # cn.plot_pan_chrom_cn(group=signature, out_path=f'cn_plots/{cohort_symbol}.{signature}.pdf')
-            # cn.plot_per_chrom_cn(group=signature, out_path=f'cn_plots/{cohort_symbol}.{signature}.per-chrom.pdf')
-            #cn.plot_pan_chrom_cn(group=signature, out_path=f'metacohort/{cohort_symbol}.{signature}.pdf')
-            #cn.plot_per_chrom_cn(group=signature, out_path=f'metacohort/{cohort_symbol}.{signature}.per-chrom.pdf')
-            cn.plot_pan_chrom_cn(group=signature, out_path=f'metacohort0719/{cohort_symbol}.{signature}.pdf')
-            cn.plot_per_chrom_cn(group=signature, out_path=f'metacohort0719/{cohort_symbol}.{signature}.per-chrom.pdf')
-            
-    if True:#cohorts != [['SPECTRUM-DLP']]:
-        if not update_regions: 
-            cn.gene_ranges.update(cn.peaks_troughs)
-        gene_cn = cn.get_gene_cn_counts()
-        results = evaluate_enrichment(cn.signatures, cn.signature_counts, cn.gene_ranges.keys(), 
-                cn.sample_counts, padj_cutoff=0.1)
-        # results.to_csv(f'enrichment/enrichment.{cohort_symbol}.tsv', sep='\t', index=False)
-        #results.to_csv(f'metacohort/enrichment/enrichment.{cohort_symbol}.tsv', sep='\t', index=False)
-        results.to_csv(f'metacohort0719/enrichment/enrichment.{cohort_symbol}.tsv', sep='\t', index=False)
+if __name__ == "__main__":
+    update_regions = False
+    logging.basicConfig(level = logging.DEBUG)
+    # gene_list_path = '/juno/work/shah/users/chois7/tickets/cohort-cn-qc/resources/gene_list.txt'
+    gene_list_path = '/juno/work/shah/users/chois7/tickets/cohort-cn-qc/resources/gene_list.simple.txt'
+    # for cohorts in (['SPECTRUM-DLP'], ['SPECTRUM'], ['Metacohort'], ['APOLLO-H'], ['SPECTRUM', 'Metacohort', 'APOLLO-H']):
+    # for cohorts in (['APOLLO-H'], ['SPECTRUM', 'Metacohort', 'APOLLO-H']):
+    #for cohorts in (['SPECTRUM-DLP'], ['SPECTRUM'], ['Metacohort']):
+    for cohorts in (['Metacohort'],):
+        cn = CopyNumberChangeData(gene_list=gene_list_path, cohorts=cohorts, update_regions=update_regions)
+        plot_peaks_troughs(cn, cn.peak_params)
+        plot_merged_peaks_troughs(cn.peaks_troughs)
+        # break
+        
+        cohort_symbol = '_'.join(cn.cohorts)
+        # break
+        for signature in cn.signature_counts:
+            logging.info(f'processing cohorts:{cohorts} signature:{signature}')
+            if cn.signature_counts[signature] > 3:
+                logging.info(f'plotting cohorts:{cohorts} signature:{signature}')
+                # cn.plot_pan_chrom_cn(group=signature, out_path=f'cn_plots/{cohort_symbol}.{signature}.pdf')
+                # cn.plot_per_chrom_cn(group=signature, out_path=f'cn_plots/{cohort_symbol}.{signature}.per-chrom.pdf')
+                #cn.plot_pan_chrom_cn(group=signature, out_path=f'metacohort/{cohort_symbol}.{signature}.pdf')
+                #cn.plot_per_chrom_cn(group=signature, out_path=f'metacohort/{cohort_symbol}.{signature}.per-chrom.pdf')
+                cn.plot_pan_chrom_cn(group=signature, out_path=f'metacohort0719/{cohort_symbol}.{signature}.pdf')
+                cn.plot_per_chrom_cn(group=signature, out_path=f'metacohort0719/{cohort_symbol}.{signature}.per-chrom.pdf')
+                
+        if True:#cohorts != [['SPECTRUM-DLP']]:
+            if not update_regions: 
+                cn.gene_ranges.update(cn.peaks_troughs)
+            gene_cn = cn.get_gene_cn_counts()
+            results = evaluate_enrichment(cn.signatures, cn.signature_counts, cn.gene_ranges.keys(), 
+                    cn.sample_counts, padj_cutoff=0.1)
+            # results.to_csv(f'enrichment/enrichment.{cohort_symbol}.tsv', sep='\t', index=False)
+            #results.to_csv(f'metacohort/enrichment/enrichment.{cohort_symbol}.tsv', sep='\t', index=False)
+            results.to_csv(f'metacohort0719/enrichment/enrichment.{cohort_symbol}.tsv', sep='\t', index=False)
