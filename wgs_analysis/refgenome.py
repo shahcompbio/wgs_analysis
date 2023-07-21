@@ -1,3 +1,4 @@
+import pysam
 import numpy as np
 import pandas as pd
 import pkg_resources
@@ -5,12 +6,15 @@ import pkg_resources
 
 def read_chromosome_lengths(genome_fasta_index):
     fai = pd.read_csv(genome_fasta_index, sep='\t', header=None, names=['chrom', 'length', 'V3', 'V4', 'V5'])
+    fai['chrom'] = fai['chrom'].str.replace('chr', '')
     fai = fai.set_index('chrom')['length']
     return fai.to_dict()
 
 
 class RefGenomeInfo(object):
     def __init__(self, version):
+        self.version = version
+        
         if version == 'hg19':
             self.chromosomes = [str(a) for a in range(1, 23)] + ['X', 'Y']
 
@@ -32,8 +36,12 @@ class RefGenomeInfo(object):
                 'chromosome_mid': self.chromosome_mid,
             }).reset_index()
 
-        elif version == 'grch38':
-            self.chromosomes = [f'chr{a}' for a in range(1, 23)] + ['chrX', 'chrY']
+            genome_gtf = pkg_resources.resource_filename('wgs_analysis', 'data/GRCh37.gtf.gz')
+            self.gtf = pysam.TabixFile(genome_gtf)
+
+
+        elif version == 'hg38' or version == 'grch38':
+            self.chromosomes = [str(a) for a in range(1, 23)] + ['X', 'Y']
 
             genome_fasta_index = pkg_resources.resource_filename('wgs_analysis', 'data/GRCh38.fa.fai')
 
@@ -52,6 +60,12 @@ class RefGenomeInfo(object):
                 'chromosome_start': self.chromosome_start,
                 'chromosome_mid': self.chromosome_mid,
             }).reset_index()
+
+            genome_gtf = pkg_resources.resource_filename('wgs_analysis', 'data/GRCh38.gtf.gz')
+            self.gtf = pysam.TabixFile(genome_gtf)
+        
+        else:
+            raise ValueError(f'{version} is not supported')
 
 info = None
 

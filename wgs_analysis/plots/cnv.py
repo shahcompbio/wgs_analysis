@@ -15,14 +15,46 @@ import matplotlib.pyplot as plt
 from matplotlib.colors import colorConverter
 import seaborn
 
-import wgs_analysis.plots.colors
-import wgs_analysis.plots.positions
-import wgs_analysis.plots.utils
+from . import general
+from .. import plots
+from .. import refgenome
+from .. import utils
 import wgs_analysis.algorithms as algorithms
-import wgs_analysis.algorithms.cnv
-import wgs_analysis.refgenome
-import wgs_analysis.algorithms.merge
 
+
+def plot_merged_remixt_cn(ax, df, chromosome, start, end,
+        cn_name=['major_1', 'minor_1'], cn_color=["tab:red", "tab:blue"],
+        set_yaxis=True):
+    """ Plot CN lines from a remixt_cn-like dataframe
+    - ax: pyplot Axes instance
+    - df: DataFrame from remixt_cn
+    - chromosome: chromosome to filter remixt input
+    - start: start coordinate to filter remixt input
+    - end: end coordinate to filter remixt input
+    - cn_name: column(s) to plot
+    - cn_color: color(s) for cn_names, sequentially
+    - set_yaxis[bool]: optimize ylim, yticks, yticklabels for input
+    """
+    if type(cn_name) == str:
+        cn_name = [cn_name]
+    if type(cn_color) == str:
+        cn_color = [cn_color]
+    assert type(start) == int or type(start) == float, f'start:{start} is not numeric'
+    assert type(end) == int or type(end) == float, f'end:{end} is not numeric'
+    assert len(cn_name) == len(cn_color), f'cn_name:{cn_name}, cn_color:{cn_color}'
+    if set_yaxis:
+        max_cn = df[cn_name].astype(int).max().max()
+        ax.set_ylim((-0.5, max_cn+0.5))
+        ax.set_yticks(np.arange(0, max_cn+1, 1))
+        ax.set_yticklabels(ax.get_yticks())
+    for _, row in df.iterrows():
+        cn_chrom, cn_start, cn_end = row['chromosome'].replace('chr', ''), int(row['start']), int(row['end'])
+        if cn_chrom == chromosome and general.is_overlap((cn_start, cn_end), (start, end)):
+            for ix, name in enumerate(cn_name):
+                cn = float(row[name])
+                color = cn_color[ix]
+                ax.plot([cn_start, cn_end], [cn, cn], linewidth=5, solid_capstyle='butt', color=color, alpha=0.5)
+    # return df
 
 def create_segments(df, field):
     segments = np.array([[df['start'].values, df[field].values], [df['end'].values, df[field].values]])
@@ -146,10 +178,10 @@ def plot_cnv_genome(ax, cnv, maxcopies=4, minlength=1000, major_col='major_raw',
 
     cnv = cnv[cnv['length'] >= minlength]
     
-    cnv = cnv[cnv['chromosome'].isin(wgs_analysis.refgenome.info.chromosomes)]
+    cnv = cnv[cnv['chromosome'].isin(refgenome.info.chromosomes)]
 
     cnv.set_index('chromosome', inplace=True)
-    cnv['chromosome_start'] = wgs_analysis.refgenome.info.chromosome_start
+    cnv['chromosome_start'] = refgenome.info.chromosome_start
     cnv.reset_index(inplace=True)
 
     cnv['start'] = cnv['start'] + cnv['chromosome_start']
@@ -173,9 +205,9 @@ def plot_cnv_genome(ax, cnv, maxcopies=4, minlength=1000, major_col='major_raw',
     ax.spines['top'].set_visible(False)
     ax.spines['right'].set_visible(False)
 
-    ax.set_xlim((-0.5, wgs_analysis.refgenome.info.chromosome_end.max()))
+    ax.set_xlim((-0.5, refgenome.info.chromosome_end.max()))
     ax.set_xlabel('chromosome')
-    ax.set_xticks([0] + list(wgs_analysis.refgenome.info.chromosome_end.values))
+    ax.set_xticks([0] + list(refgenome.info.chromosome_end.values))
     ax.set_xticklabels([])
 
     if squashy:
@@ -193,8 +225,8 @@ def plot_cnv_genome(ax, cnv, maxcopies=4, minlength=1000, major_col='major_raw',
 
     ax.xaxis.tick_bottom()
     ax.yaxis.tick_left()
-    ax.xaxis.set_minor_locator(matplotlib.ticker.FixedLocator(wgs_analysis.refgenome.info.chromosome_mid))
-    ax.xaxis.set_minor_formatter(matplotlib.ticker.FixedFormatter(wgs_analysis.refgenome.info.chromosomes))
+    ax.xaxis.set_minor_locator(matplotlib.ticker.FixedLocator(refgenome.info.chromosome_mid))
+    ax.xaxis.set_minor_formatter(matplotlib.ticker.FixedFormatter(refgenome.info.chromosomes))
 
     ax.xaxis.grid(True, which='major', linestyle=':')
     ax.yaxis.grid(True, which='major', linestyle=':')
@@ -223,7 +255,7 @@ def plot_cnv_chromosome(ax, cnv, chromosome, start=None, end=None, maxcopies=4, 
 
     """
 
-    chromosome_length = wgs_analysis.refgenome.info.chromosome_info.set_index('chr').loc[chromosome, 'chromosome_length']
+    chromosome_length = refgenome.info.chromosome_info.set_index('chr').loc[chromosome, 'chromosome_length']
 
     segment_color_major = plt.get_cmap('RdBu')(0.1)
     segment_color_minor = plt.get_cmap('RdBu')(0.9)
@@ -299,7 +331,7 @@ def plot_cnv_chromosome(ax, cnv, chromosome, start=None, end=None, maxcopies=4, 
     ax.get_xaxis().tick_bottom()
     ax.get_yaxis().tick_left()
 
-    wgs_analysis.plots.utils.trim_spines_to_ticks(ax)
+    plots.utils.trim_spines_to_ticks(ax)
 
     if grid:
         ax.xaxis.grid(True, which='major', linestyle=':')
@@ -519,7 +551,7 @@ def create_uniform_segments_genome(segment_length):
     to chromosome lengths.
     """
 
-    num_segments = (wgs_analysis.refgenome.info.chromosome_lengths.astype(float) / segment_length).apply(np.ceil)
+    num_segments = (refgenome.info.chromosome_lengths.astype(float) / segment_length).apply(np.ceil)
 
     chroms = np.concatenate([np.repeat(c, n) for c, n in num_segments.iteritems()])
     starts = np.concatenate([np.arange(0, m*segment_length, segment_length) for c, m in num_segments.iteritems()])
@@ -554,25 +586,25 @@ def uniform_resegment(cnv, segment_length=100000):
     # First segment cannot start at coordinate less than 1
     assert cnv['start'].min() >= 1
 
-    cnv['seg_idx'] = xrange(len(cnv.index))
+    cnv['seg_idx'] = range(len(cnv.index))
 
     uniform_segments = create_uniform_segments(segment_length, cnv['end'].max())
-    uniform_segments['reseg_idx'] = xrange(len(uniform_segments.index))
+    uniform_segments['reseg_idx'] = range(len(uniform_segments.index))
 
     # Find starts of the resegmentation that fall within cnv segments
-    seg_idx_1, reseg_idx_1 = wgs_analysis.algorithms.merge.interval_position_overlap_unsorted(
+    seg_idx_1, reseg_idx_1 = algorithms.merge.interval_position_overlap_unsorted(
         cnv[['start', 'end']].values,
         uniform_segments['start'].values)
     reseg_1 = pd.DataFrame({'seg_idx': seg_idx_1, 'reseg_idx': reseg_idx_1})
 
     # Find ends of the resegmentation that fall within cnv segments
-    seg_idx_2, reseg_idx_2 = wgs_analysis.algorithms.merge.interval_position_overlap_unsorted(
+    seg_idx_2, reseg_idx_2 = algorithms.merge.interval_position_overlap_unsorted(
         cnv[['start', 'end']].values,
         uniform_segments['end'].values)
     reseg_2 = pd.DataFrame({'seg_idx': seg_idx_2, 'reseg_idx': reseg_idx_2})
 
     # Find starts of the cnv segments that fall within the resegmentation
-    reseg_idx_3, seg_idx_3 = wgs_analysis.algorithms.merge.interval_position_overlap_unsorted(
+    reseg_idx_3, seg_idx_3 = algorithms.merge.interval_position_overlap_unsorted(
         uniform_segments[['start', 'end']].values,
         cnv['start'].values)
     reseg_3 = pd.DataFrame({'seg_idx': seg_idx_3, 'reseg_idx': reseg_idx_3})
@@ -730,7 +762,7 @@ def plot_cn_matrix(ax, matrix, segment_length=100000, norm_min=0.0, norm_max=1.0
     if cmap is None:
         cmap = plt.get_cmap('Oranges')
 
-    chromosome_index = [(chrom, idx) for idx, chrom in enumerate(wgs_analysis.refgenome.info.chromosomes)]
+    chromosome_index = [(chrom, idx) for idx, chrom in enumerate(refgenome.info.chromosomes)]
     chromosome_index = pd.DataFrame(chromosome_index, columns=['chromosome', 'chromosome_idx'])
 
     matrix = (
@@ -765,7 +797,7 @@ def plot_cn_matrix(ax, matrix, segment_length=100000, norm_min=0.0, norm_max=1.0
     ax.set_yticks(xrange(len(matrix.columns.values)))
     ax.set_yticklabels(matrix.columns.values)
     ax.xaxis.set_minor_locator(matplotlib.ticker.FixedLocator(chrom_seg_mid))
-    ax.xaxis.set_minor_formatter(matplotlib.ticker.FixedFormatter(wgs_analysis.refgenome.info.chromosomes))
+    ax.xaxis.set_minor_formatter(matplotlib.ticker.FixedFormatter(refgenome.info.chromosomes))
     ax.xaxis.grid(True, which='major', color='white', linestyle='-', linewidth=2)
     ax.xaxis.grid(False, which='minor')
     ax.yaxis.grid(False, which='major')
