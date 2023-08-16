@@ -4,3 +4,9 @@
 wgs_analysis.egg-info
 build
 test_svplot.ipynb
+wgs_analysis/cn/cn_changes
+wgs_analysis/cn/metacohort
+wgs_analysis/cn/metacohort0719/
+wgs_analysis/cn/plots/
+wgs_analysis/cn/pt_plots
+wgs_analysis/cn/results/

@@ -205,33 +205,38 @@ def create_cn_change_table(data:pd.DataFrame, ploidy:pd.Series,
     return cn_change_table
 
 @beartype
-def get_chromosome_gap_band_data() -> pd.DataFrame:
+def get_chromosome_gap_band_data(genome_version='hg19') -> pd.DataFrame:
     """ Parse gap.txt.gz [external] and return gap annotation dataframe
     """
-    gap_path = '/rtsess01/juno/home/chois7/ondemand/spectrumanalysis/analysis/notebooks/bulk-dna/data/gap.txt.gz'
-    gap_table = pd.read_table(gap_path, sep='\t', 
-                              names=['tag1', 'chromosome', 'start', 'end', 
-                                     'tag2', 'tag3', 'length', 'annotation', 'tag4'])
-    gap_table['chromosome'] = gap_table['chromosome'].str.replace('chr', '')
-    centromere_table = gap_table[gap_table['annotation'] == "centromere"]
+    import requests
+    import gzip
+    import io
+
+    gap_table = pd.DataFrame(columns=['tag1', 'chromosome', 'start', 'end',
+                                      'tag2', 'tag3', 'length', 'annotation', 'tag4'])
+    if genome_version == "GRCh37": genome_version = 'hg19'
+    if genome_version == "GRCh38": genome_version = 'hg38'
+    url = f'https://hgdownload.soe.ucsc.edu/goldenPath/{genome_version}/database/gap.txt.gz'
+    response = requests.get(url)
+
+    if response.status_code == 200:
+        compressed_file = io.BytesIO(response.content)
+        decompressed_file = gzip.GzipFile(fileobj=compressed_file)
+        for line in io.TextIOWrapper(decompressed_file, encoding="utf-8"):
+            field = line.rstrip().split('\t')
+            gap_table.loc[gap_table.shape[0]] = field
+    else:
+        raise ValueError(f"Failed to download {url}")
     return centromere_table
 
 @beartype
-def get_chrom_size_table(chroms:list) -> dict:
+def get_chrom_size_table(chroms:list, genome_version:str) -> dict:
     """ Return dict with key: chrom -> value: chrom size
     """
-    genome_fai = '/juno/work/shah/users/mcphera1/remixt/ref_data_hg19/Homo_sapiens.GRCh37.70.dna.chromosomes.fa.fai'
-    chrom_size_table = {}
-    
-    chromsizes = pd.read_csv(
-        genome_fai, sep='\t',
-        dtype={'Chromosome': str},
-        names=['Chromosome', 'End', 'A', 'B', 'C'],
-        usecols=['Chromosome', 'End']).assign(Start=0)
-
-    chromsizes = chromsizes[chromsizes['Chromosome'].isin(chroms)]
-    chrom_size_table = {x: int(chromsizes.loc[chromsizes['Chromosome']==x, 'End'])
-                        for x in chroms} # int(chrom end size)
+    if genome_version == "GRCh37": genome_version = "hg19"
+    if genome_version == "GRCh38": genome_version = "hg38"
+    wgs_analysis.refgenome.set_genome_version(genome_version)
+    chrom_size_table = wgs_analysis.refgenome.info.chromosome_lengths.to_dict()
     return chrom_size_table
 
 
@@ -537,7 +542,7 @@ def get_arial_fonts() -> tuple:
     return fontprop, italic_fontprop
 
 @beartype
-def get_cn_change(cn_data:pd.DataFrame, chroms:list, has_dlp:bool) -> pd.DataFrame:
+def get_cn_change(cn_data:pd.DataFrame, chroms:list, has_dlp:bool, genome_version:str) -> pd.DataFrame:
     """ Finalize CN change ready for plotting by creating, filtering, normalizing, and labeling it
     """
     bin_size = 500000
@@ -546,8 +551,8 @@ def get_cn_change(cn_data:pd.DataFrame, chroms:list, has_dlp:bool) -> pd.DataFra
     mean_above_background = get_mean_above_background(data)
     cn_change_table = create_cn_change_table(data, ploidy, mean_above_background)
 
-    centromere_table = get_chromosome_gap_band_data()
-    chrom_size_table = get_chrom_size_table(chroms)
+    centromere_table = get_chromosome_gap_band_data(genome_version)
+    chrom_size_table = get_chrom_size_table(chroms, genome_version)
 
     cn_change_table = normalize_cn_change(cn_change_table, sample_counts)
 
@@ -663,7 +668,7 @@ def create_cohort_cn_data(cohort:str, has_dlp=False) -> pd.DataFrame:
     return cn_data
 
 @beartype
-def make_merged_cn_data(cohorts=['Metacohort', 'SPECTRUM']) -> tuple:
+def make_merged_cn_data(cohorts=['Metacohort', 'SPECTRUM'], get_signatures=True, genome_version='hg19') -> tuple:
     """ Return merged melted CN per bin dataframe for given cohorts, with signature labels, and sample counts dict
     """
     chroms = wgs_analysis.refgenome.info.chromosomes[:-1]
@@ -676,6 +681,7 @@ def make_merged_cn_data(cohorts=['Metacohort', 'SPECTRUM']) -> tuple:
         'SPECTRUM-DLP': '/juno/work/shah/users/chois7/spectrum/dlp/cn/SPECTRUM.cn_data.tsv',
         'APOLLO-H': '/juno/work/shah/users/chois7/apollo/wgs/cn/APOLLO-H.cn_data.tsv',
         'merged': '/juno/work/shah/users/chois7/tickets/cohort-cn-qc/results/merged.cn_data.with_apollo.tsv',
+        'DLBCL': '/juno/work/shah/users/chois7/GDAN/DLBCL/wgs/cn/DLBCL.cn_data.tsv',
     }
 
     has_dlp = cohorts.count('SPECTRUM-DLP') > 0
@@ -697,15 +703,22 @@ def make_merged_cn_data(cohorts=['Metacohort', 'SPECTRUM']) -> tuple:
             cn_merged = pd.concat([cn_merged, cn_data])
         cn_data = cn_merged.copy()
     
-    signature_table = get_signature_table(cn_data, has_dlp) # merged signature table
-    cn_data = cn_data.merge(signature_table)
+    if get_signatures:
+        signature_table = get_signature_table(cn_data, has_dlp) # merged signature table
+    else:
+        signature_table = pd.DataFrame(columns=['isabl_sample_id', 'signature'])
+    logging.debug(f'cn_data.shape: {cn_data.shape}')
+    cn_data = cn_data.merge(signature_table, how='left')
+    logging.debug(f'cn_data.shape [after merge with signature_table]: {cn_data.shape}')
     signatures = cn_data['signature'].unique()
     
     signature_counts = {}
-    for signature in signatures:
-        logging.info(f'get signature counts: {signature}')
-        signature_count = cn_data[cn_data['signature']==signature]['isabl_sample_id'].unique().shape[0]
-        signature_counts[signature] = signature_count
+    if get_signatures:
+        for signature in signatures:
+            if np.isnan(signature): continue
+            logging.info(f'get signature counts: {signature}')
+            signature_count = cn_data[cn_data['signature']==signature]['isabl_sample_id'].unique().shape[0]
+            signature_counts[signature] = signature_count
     signature_counts['merged'] = cn_data['isabl_sample_id'].unique().shape[0]
 
     cn_changes_dir = 'cn_changes'
@@ -717,10 +730,10 @@ def make_merged_cn_data(cohorts=['Metacohort', 'SPECTRUM']) -> tuple:
         if not os.path.exists(cn_changes_path[signature]):
             logging.info(f'make signature cn_changes table: {signature}')
             if signature == 'merged':
-                cn_changes['merged'] = get_cn_change(cn_data, chroms, has_dlp)
+                cn_changes['merged'] = get_cn_change(cn_data, chroms, has_dlp, genome_version)
             else:
                 signature_cn_data = cn_data[cn_data['signature']==signature]
-                cn_changes[signature] = get_cn_change(signature_cn_data, chroms, has_dlp)
+                cn_changes[signature] = get_cn_change(signature_cn_data, chroms, has_dlp, genome_version)
             cn_changes[signature].to_csv(cn_changes_path[signature], sep='\t', index=False)
         else: # exists
             logging.info(f'load signature cn_changes table: {signature}')
@@ -1010,11 +1023,12 @@ def get_cancer_gene_census_table(liftover_hg38_to_hg19=True):
 
 class CopyNumberChangeData:
     def __init__(self, cohorts=['Metacohort', 'SPECTRUM'], gene_list=None,
-            bin_size=500000, factor=1000000, update_regions=False):
+            bin_size=500000, factor=1000000, update_regions=False, get_signatures=True,
+            genome_version="hg19"):
         self.cohorts = cohorts
         self.fontprop, self.italic_fontprop = get_arial_fonts()
         self.chroms = wgs_analysis.refgenome.info.chromosomes[:-1]
-        self.chrom_size_table = get_chrom_size_table(self.chroms)
+        self.chrom_size_table = get_chrom_size_table(self.chroms, genome_version)
         if type(gene_list) == str:
             #gene_list_file = '/juno/work/shah/users/chois7/tickets/cohort-cn-qc/resources/gene_list.txt'
             assert os.path.exists(gene_list), gene_list
@@ -1027,16 +1041,18 @@ class CopyNumberChangeData:
         self.gene_pos_table = make_gene_pos_table(self.gene_list)
         self.gene_ranges = get_gene_ranges(self.gene_list)
 
-        self.cn_changes, self.signature_counts = make_merged_cn_data(self.cohorts)
+        self.get_signatures = get_signatures
+        self.cn_changes, self.signature_counts = make_merged_cn_data(self.cohorts, self.get_signatures, genome_version)
         signatures_to_exclude = ['merged', 'HRD-Other']
         self.signatures = [s for s in self.signature_counts.keys() if s not in signatures_to_exclude]
-        self.peak_params = self.get_peak_params()
-        self.peaks_troughs = {}
-        for signature in self.signatures:
-            self.peaks_troughs.update(self.get_peak_coords(signature))
-        self.src_peaks_troughs = self.peaks_troughs
-        self.peaks_troughs = merge_peaks_troughs(self.peaks_troughs, self.chroms)
-        if update_regions: self.gene_ranges.update(self.peaks_troughs)
+        if self.get_signatures:
+            self.peak_params = self.get_peak_params()
+            self.peaks_troughs = {}
+            for signature in self.signatures:
+                self.peaks_troughs.update(self.get_peak_coords(signature))
+            self.src_peaks_troughs = self.peaks_troughs
+            self.peaks_troughs = merge_peaks_troughs(self.peaks_troughs, self.chroms)
+            if update_regions: self.gene_ranges.update(self.peaks_troughs)
 
         self.sample_counts = self.signature_counts['merged']
         self.centromere_table = get_chromosome_gap_band_data()
@@ -1323,39 +1339,3 @@ def plot_merged_peaks_troughs(peaks_troughs, plot_dir='pt_plots'):
     plt.savefig(png_path)
 
         
-if __name__ == "__main__":
-    update_regions = False
-    logging.basicConfig(level = logging.DEBUG)
-    # gene_list_path = '/juno/work/shah/users/chois7/tickets/cohort-cn-qc/resources/gene_list.txt'
-    gene_list_path = '/juno/work/shah/users/chois7/tickets/cohort-cn-qc/resources/gene_list.simple.txt'
-    # for cohorts in (['SPECTRUM-DLP'], ['SPECTRUM'], ['Metacohort'], ['APOLLO-H'], ['SPECTRUM', 'Metacohort', 'APOLLO-H']):
-    # for cohorts in (['APOLLO-H'], ['SPECTRUM', 'Metacohort', 'APOLLO-H']):
-    #for cohorts in (['SPECTRUM-DLP'], ['SPECTRUM'], ['Metacohort']):
-    for cohorts in (['Metacohort'],):
-        cn = CopyNumberChangeData(gene_list=gene_list_path, cohorts=cohorts, update_regions=update_regions)
-        plot_peaks_troughs(cn, cn.peak_params)
-        plot_merged_peaks_troughs(cn.peaks_troughs)
-        # break
-        
-        cohort_symbol = '_'.join(cn.cohorts)
-        # break
-        for signature in cn.signature_counts:
-            logging.info(f'processing cohorts:{cohorts} signature:{signature}')
-            if cn.signature_counts[signature] > 3:
-                logging.info(f'plotting cohorts:{cohorts} signature:{signature}')
-                # cn.plot_pan_chrom_cn(group=signature, out_path=f'cn_plots/{cohort_symbol}.{signature}.pdf')
-                # cn.plot_per_chrom_cn(group=signature, out_path=f'cn_plots/{cohort_symbol}.{signature}.per-chrom.pdf')
-                #cn.plot_pan_chrom_cn(group=signature, out_path=f'metacohort/{cohort_symbol}.{signature}.pdf')
-                #cn.plot_per_chrom_cn(group=signature, out_path=f'metacohort/{cohort_symbol}.{signature}.per-chrom.pdf')
-                cn.plot_pan_chrom_cn(group=signature, out_path=f'metacohort0719/{cohort_symbol}.{signature}.pdf')
-                cn.plot_per_chrom_cn(group=signature, out_path=f'metacohort0719/{cohort_symbol}.{signature}.per-chrom.pdf')
-                
-        if True:#cohorts != [['SPECTRUM-DLP']]:
-            if not update_regions: 
-                cn.gene_ranges.update(cn.peaks_troughs)
-            gene_cn = cn.get_gene_cn_counts()
-            results = evaluate_enrichment(cn.signatures, cn.signature_counts, cn.gene_ranges.keys(), 
-                    cn.sample_counts, padj_cutoff=0.1)
-            # results.to_csv(f'enrichment/enrichment.{cohort_symbol}.tsv', sep='\t', index=False)
-            #results.to_csv(f'metacohort/enrichment/enrichment.{cohort_symbol}.tsv', sep='\t', index=False)
-            results.to_csv(f'metacohort0719/enrichment/enrichment.{cohort_symbol}.tsv', sep='\t', index=False)
