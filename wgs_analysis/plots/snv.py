@@ -14,7 +14,7 @@ import wgs_analysis.plots.colors
 import wgs_analysis.refgenome as refgenome
 
 
-def snv_adjacent_density_plot(ax, snvs):
+def snv_adjacent_density_plot(ax, snvs, color_by_chromosome=True, alpha=0.5, s=5, lw=0, **kwargs):
 
     snvs = snvs.drop_duplicates(['chrom', 'coord'])
 
@@ -29,10 +29,16 @@ def snv_adjacent_density_plot(ax, snvs):
 
     assert not snvs['chromosome_color'].isnull().any()
 
+    facecolors = None
+    edgecolors = None
+    if color_by_chromosome:
+        facecolors = list(snvs['chromosome_color'])
+        edgecolors = list(snvs['chromosome_color'])
+
     ax.scatter(snvs['plot_coord'], snvs['adjacent_density'], 
-                facecolors=list(snvs['chromosome_color']),
-                edgecolors=list(snvs['chromosome_color']),
-                alpha=0.5, s=5, lw=0)
+                facecolors=facecolors,
+                edgecolors=edgecolors,
+                alpha=alpha, s=s, lw=lw, **kwargs)
 
     ax.set_xlim(min(snvs['plot_coord']), max(snvs['plot_coord']))
     ax.set_xticks(refgenome.info.chromosome_mid, minor=False)
@@ -45,7 +51,7 @@ def snv_adjacent_density_plot(ax, snvs):
     ax.set_ylabel('snv density')
 
 
-def snv_adjacent_distance_plot(ax, snvs):
+def snv_adjacent_distance_plot(ax, snvs, color_by_chromosome=True, alpha=0.5, s=5, lw=0, **kwargs):
 
     snvs = snvs.drop_duplicates(['chrom', 'coord'])
 
@@ -62,12 +68,18 @@ def snv_adjacent_distance_plot(ax, snvs):
 
     snvs['adjacent_distance_log'] = snvs['adjacent_distance'].apply(np.log10)
 
+    facecolors = None
+    edgecolors = None
+    if color_by_chromosome:
+        facecolors = list(snvs['chromosome_color'])
+        edgecolors = list(snvs['chromosome_color'])
+
     ax.scatter(
         snvs['plot_coord'],
         snvs['adjacent_distance_log'], 
-        facecolors=list(snvs['chromosome_color']),
-        edgecolors=list(snvs['chromosome_color']),
-        alpha=0.5, s=5, lw=0)
+        facecolors=facecolors,
+        edgecolors=edgecolors,
+        alpha=alpha, s=s, lw=lw, **kwargs)
 
     ax.set_xlabel('chromosome')
     ax.set_xlim(min(snvs['plot_coord']), max(snvs['plot_coord']))
