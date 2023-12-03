@@ -11,9 +11,8 @@ import seaborn
 import random
 import scipy
 
-import wgs_analysis.plots as plots
-import wgs_analysis.refgenome as refgenome
-import wgs_analysis.plots.colors
+from .. import plots
+from .. import refgenome
 
 
 default_rearrangement_types = ['foldback', 'deletion', 'duplication', 'inversion', 'balanced', 'unbalanced', 'complex']
@@ -339,12 +338,16 @@ def is_pos_in_xlim(chrom, pos, plot_chrom, xlim):
     return True
 
 
-def plot_sv_on_ax(ax, sv, chromosome):
+def plot_sv_on_ax(ax, sv, chromosome, 
+        no_sv_text=False, gene_text=False, y_diff_factor=0.6):
     """ Plot adjacencies in a given Axes instance
 
     Args:
-        ax: matplotlib axis
-        sv: consensus csv-like sv table
+        ax: matplotlib Axes (note: xlim, ylim should be already set)
+        sv: consensus csv-like sv table (either pd.DataFrame [multiple] or pd.Series [single SV])
+        no_sv_text: do not print SV sizes or translocation destinations
+        gene_text [bool]: show target gene annotation for translocation instead of target coordinates
+        y_diff_factor: how tall the vertical bar of an SV should be: y1 = y_min + (y_max-y_min) * y_diff_factor
     
     Kwargs:
         chromosome: chromosome that `ax` is based on
@@ -353,11 +356,13 @@ def plot_sv_on_ax(ax, sv, chromosome):
         - chromosome_[12]
         - position_[12]
         - strand_[12]
-        - gene_name_[12]
-        - gene_location_[12]
+        - [gene_name_[12]]
+        - [gene_location_[12]]
         - type
     """
     svs = sv.copy()
+    if type(svs) == pd.Series:
+        svs = pd.DataFrame(svs).T # make into a DataFrame
     svcolors = {
         'deletion':'blue', 'insertion':'green', 'inversion':'purple', 'duplication':'red', 'translocation':'black'
     }
@@ -374,26 +379,34 @@ def plot_sv_on_ax(ax, sv, chromosome):
     ymin, ymax = ax.get_ylim()
     x_offset = (xmax - xmin) / 100
     chromosomes = [str(c) for c in range(1, 22+1)] + ['X', 'Y']
+    gene_cols = ['gene_name_1', 'gene_name_2', 'gene_location_1', 'gene_location_2']
+    has_gene_info = svs.columns[svs.columns.isin(gene_cols)].shape[0] == len(gene_cols)
+    # print(svs)
 
-    for i, (rix, row) in enumerate(svs.iterrows()):
+    for i, (_, row) in enumerate(svs.iterrows()):
         # sv features
         chrom1, chrom2 = row['chromosome_1'], row['chromosome_2']
         assert chrom1 in chromosomes and chrom2 in chromosomes
         pos1, pos2 = row['position_1'], row['position_2']
         strand1, strand2 = row['strand_1'], row['strand_2']
-        gene1, gene2 = row['gene_name_1'], row['gene_name_2']
-        geneloc1, geneloc2 = row['gene_location_1'], row['gene_location_2']
+        if has_gene_info:
+            gene1, gene2 = row['gene_name_1'], row['gene_name_2']
+            geneloc1, geneloc2 = row['gene_location_1'], row['gene_location_1']
         
         if chrom1 == chrom2 and pos1 > pos2:
             pos1, pos2, strand1, strand2 = pos2, pos1, strand2, strand1
-            gene1, gene2, geneloc1, geneloc2 = gene2, gene1, geneloc2, geneloc1
+            if has_gene_info:
+                gene1, gene2, geneloc1, geneloc2 = gene2, gene1, geneloc2, geneloc1
         elif chromosomes.index(chrom2) < chromosomes.index(chrom1):
             chrom1, chrom2, pos1, pos2, strand1, strand2 = chrom2, chrom1, pos2, pos1, strand2, strand1
-            gene1, gene2, geneloc1, geneloc2 = gene2, gene1, geneloc2, geneloc1
+            if has_gene_info:
+                gene1, gene2, geneloc1, geneloc2 = gene2, gene1, geneloc2, geneloc1
 
         svtype = row['type']
         if (not is_pos_in_xlim(chrom1, pos1, chromosome, ax.get_xlim()) and 
             not is_pos_in_xlim(chrom2, pos2, chromosome, ax.get_xlim())): 
+            # print(chrom1, pos1, chromosome, ax.get_xlim())
+            # print(chrom2, pos2, chromosome, ax.get_xlim())
             continue
         svcolor = svcolors[svtype]
         arrow_facecolor = svcolor
@@ -406,7 +419,7 @@ def plot_sv_on_ax(ax, sv, chromosome):
         x1_between_xlim = chrom1 == chromosome and x1 >= xmin and x1 < xmax
         x2_between_xlim = chrom2 == chromosome and x2 >= xmin and x2 < xmax
         y_diff = ymax - ymin
-        y_top = ymin + 0.6 * y_diff # ymin + 0.3 * y_diff
+        y_top = ymin + y_diff * y_diff_factor # ymin + 0.3 * y_diff
         offset_base = int(y_diff * 0.15)
         offset_with_ix = offset_base * 0.7 * (i+1)
         y_offset = max(offset_base, offset_with_ix)
@@ -416,26 +429,32 @@ def plot_sv_on_ax(ax, sv, chromosome):
         x1_component = [(xmin, y_top+y_offset), (xmin+1, y_top+y_offset)]
         x2_component = [(xmax-1, y_top+y_offset), (xmax, y_top+y_offset)]
         if x1_between_xlim:
+            # print([x1, x1], [0, y_top])
             if svtype == 'TRA':
-                # svtext = f'~chr{chrom2}:{pos2}'
-                svtext = f'~ {gene2}: {geneloc2}'
+                svtext = f'~chr{chrom2}:{pos2}'
+                if has_gene_info and gene_text:
+                    svtext = f'~ {gene2}: {geneloc2}'
                 
             x1_component = [(x1, y_top), (x1, y_top+y_offset)]
             ax.plot([x1, x1], [0, y_top], color=svcolor, linewidth=linewidth)
             if strand1 == '+': plot_arrow(ax, x1-x_offset, y_top, +x_offset, 0, color=arrow_facecolor, arrow_width=arrow_width)
             else:              plot_arrow(ax, x1+x_offset, y_top, -x_offset, 0, color=arrow_facecolor, arrow_width=arrow_width)
         else: 
+            # print(f'x1_between_xlim: {x1_between_xlim}')
             pass 
 
         if x2_between_xlim:
+            # print([x2, x2], [0, y_top])
             if svtype == 'TRA':
-                # svtext = f'~chr{chrom1}:{pos1}'
-                svtext = f'~ {gene1}: {geneloc1}'
+                svtext = f'~chr{chrom1}:{pos1}'
+                if has_gene_info and gene_text:
+                    svtext = f'~ {gene1}: {geneloc1}'
             x2_component = [(x2, y_top+y_offset), (x2, y_top)]
             ax.plot([x2, x2], [0, y_top], color=svcolor, linewidth=linewidth)            
             if strand2 == '+': plot_arrow(ax, x2-x_offset, y_top, +x_offset, 0, color=arrow_facecolor, arrow_width=arrow_width)
             else:              plot_arrow(ax, x2+x_offset, y_top, -x_offset, 0, color=arrow_facecolor, arrow_width=arrow_width)
         else: 
+            # print(f'x2_between_xlim: {x2_between_xlim}')
             pass
 
         verts = x1_component + x2_component
@@ -452,7 +471,9 @@ def plot_sv_on_ax(ax, sv, chromosome):
             x_text = (xmin + x2) // 2
         else:
             raise ValueError('coordinates not between x1 or x2')
-        ax.text(x_text, y_text, svtext, color=svcolor, ha='center', fontdict={'size':11})
-        if ymax < y_text: 
-            ax.set_ylim((ymin, y_text))
-            ax.spines['left'].set_bounds(ymin, y_text)
+
+        if not no_sv_text:
+            ax.text(x_text, y_text, svtext, color=svcolor, ha='center', fontdict={'size':11})
+            if ymax < y_text: 
+                ax.set_ylim((ymin, y_text))
+                ax.spines['left'].set_bounds(ymin, y_text)
