@@ -45,7 +45,7 @@ def get_include_wgs_samples(cohort:str) -> list:
 def qc_cn_data_and_samples(cn_data:pd.DataFrame) -> None:
     """ Check input cn_data shape
     """ 
-    loggong.debug(f"cn_data.shape: {cn_data.shape}")
+    logging.debug(f"cn_data.shape: {cn_data.shape}")
     n_samples = cn_data.isabl_sample_id.unique().shape
     logging.debug(f"unique sample count: {n_samples}")
 
@@ -558,32 +558,14 @@ def get_cn_change(cn_data:pd.DataFrame, chroms:list, has_dlp:bool) -> pd.DataFra
     return plot_data
 
 @beartype
-def get_signature_table(cn_data:pd.DataFrame, has_dlp:bool) -> pd.DataFrame:
+def get_signature_table(cn_data:pd.DataFrame) -> pd.DataFrame:
     """ Return dataframe of ['sample', 'signature'] for SPECTRUM [external] and Metacohort [external]
     """
     columns = ['sample', 'signature']
-    if not has_dlp:
-        spectrum_signature_path = '/juno/work/shah/users/chois7/spectrum/dlp/cn/mutational_signatures.tsv'
-        metacohort_signature_path = '/juno/work/shah/users/chois7/metacohort/mmctm/resources/Tyler_2022_Nature_labels.isabl.tsv'
-        apollo_signature_path = ''
-        spectrum_ix = cn_data['isabl_sample_id'].str.startswith('SPECTRUM')
-        cn_data.loc[spectrum_ix, 'sample'] = cn_data.loc[spectrum_ix, 'isabl_sample_id'].str.slice(0, 15)
-        cn_data.loc[~spectrum_ix, 'sample'] = cn_data.loc[~spectrum_ix, 'isabl_sample_id']
-        spectrum_signature = pd.read_table(spectrum_signature_path)[['patient_id', 'consensus_signature']]
-        spectrum_signature.columns = columns
-        metacohort_signature = pd.read_table(metacohort_signature_path)[['isabl_sample_id', 'stratum']]
-        metacohort_signature.columns = columns
-        apollo_signature = pd.read_table('/juno/work/shah/users/chois7/apollo/wgs/cn/signature_labels.tsv')
-        apollo_signature.columns = columns
-        signatures = pd.concat([spectrum_signature, metacohort_signature, apollo_signature])
-    else:
-        spectrum_signature_path = '/juno/work/shah/users/chois7/spectrum/dlp/cn/mutational_signatures.tsv'
-        spectrum_ix = cn_data['isabl_sample_id'].str.startswith('SPECTRUM')
-        cn_data.loc[spectrum_ix, 'sample'] = cn_data.loc[spectrum_ix, 'isabl_sample_id'].str.slice(0, 15)
-        cn_data.loc[~spectrum_ix, 'sample'] = cn_data.loc[~spectrum_ix, 'isabl_sample_id']
-        spectrum_signature = pd.read_table(spectrum_signature_path)[['patient_id', 'consensus_signature']]
-        spectrum_signature.columns = columns
-        signatures = spectrum_signature
+    tumor_type_path = '/juno/work/shah/users/chois7/tickets/hcmi/metadata/tumor_types.tsv'
+    tumor_type = pd.read_table(tumor_type_path)[['isabl_sample_id', 'project']]
+    tumor_type.columns = columns
+    signatures = tumor_type
     return signatures
 
 @beartype
@@ -636,6 +618,7 @@ def create_cohort_cn_data(cohort:str, has_dlp=False) -> pd.DataFrame:
     """
     if not has_dlp:
         isabl_cohort = 'APOLLO' if cohort.startswith('APOLLO') else cohort
+        isabl_cohort = 'HCMI GDAN AWG' if cohort == 'HCMI' else cohort
         cn_data = shahlabdata.wgs.get_cohort_cn(isabl_cohort, most_recent=True)
         include_wgs_samples = get_include_wgs_samples(cohort)
         if len(include_wgs_samples) > 0:
@@ -671,33 +654,26 @@ def make_merged_cn_data(cohorts=['Metacohort', 'SPECTRUM']) -> tuple:
     os.environ['ISABL_CLIENT_ID'] = '3'
 
     saved = {
-        'Metacohort': '/juno/work/shah/users/chois7/metacohort/wgs/cn/Metacohort.cn_data.tsv',
-        'SPECTRUM': '/juno/work/shah/users/chois7/spectrum/wgs/cn/SPECTRUM.cn_data.tsv',
-        'SPECTRUM-DLP': '/juno/work/shah/users/chois7/spectrum/dlp/cn/SPECTRUM.cn_data.tsv',
-        'APOLLO-H': '/juno/work/shah/users/chois7/apollo/wgs/cn/APOLLO-H.cn_data.tsv',
-        'merged': '/juno/work/shah/users/chois7/tickets/cohort-cn-qc/results/merged.cn_data.with_apollo.tsv',
+        'HCMI': '/juno/work/shah/users/chois7/tickets/hcmi/cohort-cn-qc/HCMI.cn_data.tsv',
     }
 
     has_dlp = cohorts.count('SPECTRUM-DLP') > 0
     if has_dlp:
         assert set(cohorts) == {'SPECTRUM-DLP'}, f'cohorts:{cohorts} should not include both WGS and DLP'
 
-    if os.path.exists(saved['merged']):
-        cn_data = pd.read_table(saved['merged'])
-    else:
-        cn_merged = pd.DataFrame()
-        for cohort in cohorts:
-            if os.path.exists(saved[cohort]):
-                cn_data = pd.read_table(saved[cohort])
-                logging.debug(f'{cohort} data retrieved: cohort.shape: {cn_data.shape}')
-            else:
-                cn_data = create_cohort_cn_data(cohort, has_dlp)
-                cn_data.to_csv(saved[cohort], sep='\t', index=False)
+    cn_merged = pd.DataFrame()
+    for cohort in cohorts:
+        if os.path.exists(saved[cohort]):
+            cn_data = pd.read_table(saved[cohort])
+            logging.debug(f'{cohort} data retrieved: cohort.shape: {cn_data.shape}')
+        else:
+            cn_data = create_cohort_cn_data(cohort, has_dlp)
+            cn_data.to_csv(saved[cohort], sep='\t', index=False)
 
-            cn_merged = pd.concat([cn_merged, cn_data])
-        cn_data = cn_merged.copy()
+        cn_merged = pd.concat([cn_merged, cn_data])
+    cn_data = cn_merged.copy()
     
-    signature_table = get_signature_table(cn_data, has_dlp) # merged signature table
+    signature_table = get_signature_table(cn_data) # merged signature table
     cn_data = cn_data.merge(signature_table)
     signatures = cn_data['signature'].unique()
     
@@ -1323,38 +1299,32 @@ def plot_merged_peaks_troughs(peaks_troughs, plot_dir='pt_plots'):
     plt.savefig(png_path)
 
         
-update_regions = False
-logging.basicConfig(level = logging.DEBUG)
+if __name__ == "__main__":
+    update_regions = False
+    logging.basicConfig(level = logging.DEBUG)
 # gene_list_path = '/juno/work/shah/users/chois7/tickets/cohort-cn-qc/resources/gene_list.txt'
-gene_list_path = '/juno/work/shah/users/chois7/tickets/cohort-cn-qc/resources/gene_list.simple.txt'
+    gene_list_path = '/juno/work/shah/users/chois7/tickets/cohort-cn-qc/resources/gene_list.simple.txt'
 # for cohorts in (['SPECTRUM-DLP'], ['SPECTRUM'], ['Metacohort'], ['APOLLO-H'], ['SPECTRUM', 'Metacohort', 'APOLLO-H']):
 # for cohorts in (['APOLLO-H'], ['SPECTRUM', 'Metacohort', 'APOLLO-H']):
 #for cohorts in (['SPECTRUM-DLP'], ['SPECTRUM'], ['Metacohort']):
-for cohorts in (['Metacohort'],):
-    cn = CopyNumberChangeData(gene_list=gene_list_path, cohorts=cohorts, update_regions=update_regions)
-    plot_peaks_troughs(cn, cn.peak_params)
-    plot_merged_peaks_troughs(cn.peaks_troughs)
-    # break
-    
-    cohort_symbol = '_'.join(cn.cohorts)
-    # break
-    for signature in cn.signature_counts:
-        logging.info(f'processing cohorts:{cohorts} signature:{signature}')
-        if cn.signature_counts[signature] > 3:
-            logging.info(f'plotting cohorts:{cohorts} signature:{signature}')
-            # cn.plot_pan_chrom_cn(group=signature, out_path=f'cn_plots/{cohort_symbol}.{signature}.pdf')
-            # cn.plot_per_chrom_cn(group=signature, out_path=f'cn_plots/{cohort_symbol}.{signature}.per-chrom.pdf')
-            #cn.plot_pan_chrom_cn(group=signature, out_path=f'metacohort/{cohort_symbol}.{signature}.pdf')
-            #cn.plot_per_chrom_cn(group=signature, out_path=f'metacohort/{cohort_symbol}.{signature}.per-chrom.pdf')
-            cn.plot_pan_chrom_cn(group=signature, out_path=f'metacohort0719/{cohort_symbol}.{signature}.pdf')
-            cn.plot_per_chrom_cn(group=signature, out_path=f'metacohort0719/{cohort_symbol}.{signature}.per-chrom.pdf')
-            
-    if True:#cohorts != [['SPECTRUM-DLP']]:
+    for cohorts in (['HCMI'],):
+        cn = CopyNumberChangeData(gene_list=gene_list_path, cohorts=cohorts, update_regions=update_regions)
+        plot_peaks_troughs(cn, cn.peak_params)
+        plot_merged_peaks_troughs(cn.peaks_troughs)
+        # break
+        
+        cohort_symbol = '_'.join(cn.cohorts)
+        # break
+        for signature in cn.signature_counts:
+            logging.info(f'processing cohorts:{cohorts} tumor-code:{signature}')
+            if cn.signature_counts[signature] > 3:
+                logging.info(f'plotting cohorts:{cohorts} tumor-code:{signature}')
+                cn.plot_pan_chrom_cn(group=signature, out_path=f'hcmi/results/{cohort_symbol}.{signature}.pdf')
+                cn.plot_per_chrom_cn(group=signature, out_path=f'hcmi/results/{cohort_symbol}.{signature}.per-chrom.pdf')
+                
         if not update_regions: 
             cn.gene_ranges.update(cn.peaks_troughs)
         gene_cn = cn.get_gene_cn_counts()
         results = evaluate_enrichment(cn.signatures, cn.signature_counts, cn.gene_ranges.keys(), 
                 cn.sample_counts, padj_cutoff=0.1)
-        # results.to_csv(f'enrichment/enrichment.{cohort_symbol}.tsv', sep='\t', index=False)
-        #results.to_csv(f'metacohort/enrichment/enrichment.{cohort_symbol}.tsv', sep='\t', index=False)
-        results.to_csv(f'metacohort0719/enrichment/enrichment.{cohort_symbol}.tsv', sep='\t', index=False)
+        results.to_csv(f'hcmi/results/enrichment/enrichment.{cohort_symbol}.tsv', sep='\t', index=False)
