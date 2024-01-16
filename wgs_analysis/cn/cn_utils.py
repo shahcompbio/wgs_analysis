@@ -1,3 +1,4 @@
+print('test2')
 import re
 import os
 import sys
@@ -30,6 +31,8 @@ import wgs_analysis.plots.cnv
 from wgs_qc_utils.reader.ideogram import read_ideogram
 import shahlabdata.wgs
 
+genome_version = 'hg38'
+wgs_analysis.refgenome.set_genome_version(genome_version)
 
 @beartype
 def get_include_wgs_samples(cohort:str) -> list:
@@ -69,12 +72,14 @@ def select_histotype_and_project(cn_data:pd.DataFrame, cohort:str) -> pd.DataFra
 def rebin(data:pd.DataFrame, bin_size:int, cols:list, chroms:list) -> pd.DataFrame:
     """ Merge/split data bins to given bin_size
     """
-    genome_fai = '/work/shah/users/mcphera1/remixt/ref_data_hg19/Homo_sapiens.GRCh37.70.dna.chromosomes.fa.fai'
+    #genome_fai = '/work/shah/users/mcphera1/remixt/ref_data_hg19/Homo_sapiens.GRCh37.70.dna.chromosomes.fa.fai'
+    genome_fai = '/juno/work/shah/users/chois7/datasets/GRCh38/Homo_sapiens_assembly38.fasta.fai'
     chromsizes = pd.read_csv(
         genome_fai, sep='\t',
         dtype={'Chromosome': str},
         names=['Chromosome', 'End', 'A', 'B', 'C'],
         usecols=['Chromosome', 'End']).assign(Start=0)
+    chromsizes['Chromosome'] = chromsizes['Chromosome'].str.replace('chr', '')
     chromsizes = chromsizes[chromsizes['Chromosome'].isin(chroms)]
 
     chromsizes = pr.PyRanges(chromsizes)
@@ -561,9 +566,9 @@ def get_cn_change(cn_data:pd.DataFrame, chroms:list, has_dlp:bool) -> pd.DataFra
 def get_signature_table(cn_data:pd.DataFrame) -> pd.DataFrame:
     """ Return dataframe of ['sample', 'signature'] for SPECTRUM [external] and Metacohort [external]
     """
-    columns = ['sample', 'signature']
+    columns = ['isabl_sample_id', 'signature']
     tumor_type_path = '/juno/work/shah/users/chois7/tickets/hcmi/metadata/tumor_types.tsv'
-    tumor_type = pd.read_table(tumor_type_path)[['isabl_sample_id', 'project']]
+    tumor_type = pd.read_table(tumor_type_path)[['isabl_sample_id', 'origin']]
     tumor_type.columns = columns
     signatures = tumor_type
     return signatures
@@ -676,6 +681,7 @@ def make_merged_cn_data(cohorts=['Metacohort', 'SPECTRUM']) -> tuple:
     signature_table = get_signature_table(cn_data) # merged signature table
     cn_data = cn_data.merge(signature_table)
     signatures = cn_data['signature'].unique()
+    cn_data['chromosome'] = cn_data['chromosome'].str.replace('chr', '')
     
     signature_counts = {}
     for signature in signatures:
@@ -1022,6 +1028,12 @@ class CopyNumberChangeData:
 
     def get_peak_params(self):
         peak_params = {
+            ('HCMI',): { 
+                'FBI': [0.5, 0.6, 0.08],
+                'HRD-Dup': [0.5, 0.6, 0.1],
+                'HRD-Del': [0.5, 0.6, 0.1],
+                'Undetermined': [0.5, 2, 0.01],
+            },
             ('SPECTRUM-DLP',): { # pass v1
                 'FBI': [0.5, 0.6, 0.08],
                 'HRD-Dup': [0.5, 0.6, 0.1],
