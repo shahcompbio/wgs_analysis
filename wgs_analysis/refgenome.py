@@ -33,7 +33,7 @@ class RefGenomeInfo(object):
             }).reset_index()
 
         elif version == 'hg38':
-            self.chromosomes = [str(a) for a in range(1, 23)] + ['X', 'Y']
+            self.chromosomes = [f'chr{a}' for a in range(1, 23)] + ['chrX', 'chrY']
 
             genome_fasta_index = pkg_resources.resource_filename('wgs_analysis', 'data/GRCh38_full_analysis_set_plus_decoy_hla.fa.fai')
 
