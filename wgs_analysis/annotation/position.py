@@ -40,9 +40,7 @@ def annotate_adjacent_density(df, stddev=5000):
         .groupby(level='chrom')['coord']
         .transform(calculate_adjacent_density, stddev))
 
-    df.set_index(['chrom', 'coord'], inplace=True)
-    df['adjacent_density'] = adjacent_density
-    df.reset_index(inplace=True)
+    df['adjacent_density'] = adjacent_density.loc[pd.MultiIndex.from_frame(df[['chrom', 'coord']])].values
 
     return df
 
@@ -70,10 +68,8 @@ def annotate_adjacent_distance(df):
         positions
         .groupby(level='chrom')['coord']
         .transform(lambda pos: calculate_adjacent_distance(pos.values)))
-
-    df.set_index(['chrom', 'coord'], inplace=True)
-    df['adjacent_distance'] = adjacent_distance
-    df.reset_index(inplace=True)
+    
+    df['adjacent_distance'] = adjacent_distance.loc[pd.MultiIndex.from_frame(df[['chrom', 'coord']])].values
 
     return df
 
