@@ -321,7 +321,8 @@ def calculate_tri_nucleotide_context(data, ref_genome_fasta):
     for idx, row in data.iterrows():
         tnc = str(ref_genome[row['chrom']][row['coord']-2:row['coord']+1])
         assert len(tnc) == 3
-        assert tnc[1] == row['ref']
+        if 'ref' in row:
+            assert tnc[1] == row['ref']
         data.loc[idx, 'tri_nucleotide_context'] = tnc
 
     assert data['tri_nucleotide_context'].notnull().all()
