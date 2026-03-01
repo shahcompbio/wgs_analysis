@@ -56,7 +56,7 @@ def chromosome_type_plot(ax, breakends, bin_size=20000000, rearrangement_types=N
         ax.bar(plot_bin_starts, count_table[rearrangement_type].values,
                bottom=accum_counts, width=bin_size,
                facecolor=rearrangement_type_colors[idx],
-               edgecolor=rearrangement_type_colors[idx])
+               lw=0)
         if accum_counts is None:
             accum_counts = count_table[rearrangement_type].values
         else:
