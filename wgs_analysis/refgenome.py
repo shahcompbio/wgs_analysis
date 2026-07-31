@@ -1,6 +1,6 @@
 import numpy as np
 import pandas as pd
-import pkg_resources
+from importlib.resources import files
 
 
 def read_chromosome_lengths(genome_fasta_index):
@@ -14,14 +14,14 @@ class RefGenomeInfo(object):
         if version == 'hg19':
             self.chromosomes = [str(a) for a in range(1, 23)] + ['X', 'Y']
 
-            genome_fasta_index = pkg_resources.resource_filename('wgs_analysis', 'data/GRCh37-lite.fa.fai')
+            genome_fasta_index = str(files('wgs_analysis').joinpath('data', 'GRCh37-lite.fa.fai'))
 
             self.chromosome_lengths = pd.Series(read_chromosome_lengths(genome_fasta_index)).reindex(self.chromosomes).astype(int)
             self.chromosome_lengths.index.name = 'chr'
 
             self.chromosome_end = np.cumsum(self.chromosome_lengths)
             self.chromosome_start = self.chromosome_end.shift(1)
-            self.chromosome_start[0] = 0
+            self.chromosome_start.iloc[0] = 0
             self.chromosome_start = self.chromosome_start.astype(int)
             self.chromosome_mid = (self.chromosome_start + self.chromosome_end) / 2.
 
@@ -35,14 +35,14 @@ class RefGenomeInfo(object):
         elif version == 'grch38':
             self.chromosomes = [f'chr{a}' for a in range(1, 23)] + ['chrX', 'chrY']
 
-            genome_fasta_index = pkg_resources.resource_filename('wgs_analysis', 'data/GRCh38.fa.fai')
+            genome_fasta_index = str(files('wgs_analysis').joinpath('data', 'GRCh38.fa.fai'))
 
             self.chromosome_lengths = pd.Series(read_chromosome_lengths(genome_fasta_index)).reindex(self.chromosomes).astype(int)
             self.chromosome_lengths.index.name = 'chr'
 
             self.chromosome_end = np.cumsum(self.chromosome_lengths)
             self.chromosome_start = self.chromosome_end.shift(1)
-            self.chromosome_start[0] = 0
+            self.chromosome_start.iloc[0] = 0
             self.chromosome_start = self.chromosome_start.astype(int)
             self.chromosome_mid = (self.chromosome_start + self.chromosome_end) / 2.
 

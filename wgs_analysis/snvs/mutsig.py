@@ -7,7 +7,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import pyfaidx
 import matplotlib.font_manager
-import pkg_resources
+from importlib.resources import files
 
 
 def reverse_complement(sequence):
@@ -97,7 +97,7 @@ def plot_signature_boxplots(sample_sig, pvalue_threshold=0.01):
 def load_signature_probabilities():
     """ Load a dataframe of cosmic signature probabilities.
     """
-    sig_prob_filename = pkg_resources.resource_filename('wgs_analysis', 'data/signatures_probabilities.tsv')
+    sig_prob_filename = str(files('wgs_analysis').joinpath('data', 'signatures_probabilities.tsv'))
 
     sig_prob = pd.read_csv(sig_prob_filename, sep='\t')
 

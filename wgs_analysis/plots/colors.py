@@ -6,7 +6,6 @@ Standardized color sets for consistent plots.
 '''
 from collections import OrderedDict
 
-import brewer2mpl
 import collections
 import matplotlib.pyplot as plt
 import pandas as pd
@@ -39,7 +38,8 @@ def create_chromosome_color_map():
 
 
 def get_single_cell_color_set():
-    snv_palette = brewer2mpl.get_map('YlGnBu', 'Sequential', 3).mpl_colors
+    from palettable.colorbrewer.sequential import YlGnBu_3
+    snv_palette = YlGnBu_3.mpl_colors
 
     colors = OrderedDict((('A', snv_palette[0]),
                           ('AB', snv_palette[1]),
